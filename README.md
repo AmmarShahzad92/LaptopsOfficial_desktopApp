@@ -1,39 +1,48 @@
-# Laptop Inventory Management System
+# Laptop Inventory & POS System
 
-This is a desktop application built with Python for managing a laptop inventory business. It provides a graphical user interface to handle various aspects of the business, from inventory control to sales and reporting.
+This is a comprehensive desktop application built with Python and PyQt6 for managing a laptop inventory and sales business. It provides a feature-rich graphical user interface to handle various aspects of the business, from inventory control and sales processing (Point of Sale) to customer management and in-depth reporting.
 
 ## Features
 
-*   **Welcome Screen**: An initial screen to welcome the user.
-*   **Admin Panel**: A comprehensive dashboard for administrators to manage the entire system.
-*   **Point of Sale (POS)**: A dedicated window for processing sales transactions.
+*   **Authentication**: Secure login for staff members with role-based access.
+*   **Admin Panel**: A central dashboard for administrators to manage the entire system, including staff, roles, and locations.
+*   **Point of Sale (POS)**: A dedicated window for processing sales transactions, generating invoices, and printing receipts.
 *   **Inventory Management**:
-    *   Add, update, and view inventory items.
-    *   Track stock levels and locations.
-*   **Reporting**: Generate reports on sales, inventory, and customers.
-*   **Customer Management**: Keep a record of customer information.
+    *   Add, update, and view products and categories.
+    *   Track stock levels across different locations (stores, warehouses).
+    *   Manage suppliers and purchase orders.
+    *   Handle stock movements and returns.
+*   **Reporting**:
+    *   Generate detailed reports on sales, inventory, purchases, and customer activity.
+    *   Visualize data with charts and graphs.
+*   **Customer Management**: Maintain a database of customer information for sales and marketing purposes.
 *   **Database Management**:
-    *   Initialize the database schema.
+    *   Initialize the SQLite database schema.
     *   Seed the database with initial data for testing and demonstration.
 
 ## Tech Stack
 
 *   **Language**: Python
-*   **GUI**: (Likely) Tkinter or a similar Python GUI framework.
-*   **Database**: SQLite (as suggested by the `db.py` and `initialize_database.py` files).
+*   **GUI**: PyQt6
+*   **Database**: SQLite
+*   **Reporting**: reportlab (for PDF generation), pandas, openpyxl
+*   **Data Visualization**: matplotlib, seaborn
+*   **Barcode/QR Code**: python-barcode, qrcode
 
 ## Project Structure
 
 The project is organized into a modular structure:
 
 *   `main.py`: The main entry point of the application.
-*   **Window Files** (`welcome_window.py`, `admin_panel.py`, `inventory_window.py`, etc.): Each file defines a specific window or part of the user interface.
-*   `app/`: This directory contains the core application logic, following a Model-View-Controller (MVC) like pattern.
-    *   `models/`: Defines the database tables and data structures (e.g., `products.py`, `sales.py`, `customers.py`).
-    *   `controllers/`: Contains the business logic to handle user interactions and data manipulation.
-    *   `database/`: Manages the database connection.
+*   **Window Files** (`welcome_window.py`, `admin_panel.py`, `pos_window.py`, etc.): Each file defines a specific window or major UI component.
+*   `app/`: This directory contains the core application logic, following a layered architecture.
+    *   `models/`: Defines the database schema and data structures using SQLAlchemy-like classes for each table (e.g., `products.py`, `sales.py`, `customers.py`).
+    *   `controllers/`: Contains the business logic to handle user interactions, data validation, and communication between the UI and the database.
+    *   `database/`: Manages the database connection (`db.py`).
 *   `widgets.py`: Contains custom UI widgets used across the application.
-*   `styles.py`: Defines the styling for the UI components.
+*   `styles.py`: Defines the styling (QSS) for the UI components.
+*   `initialize_database.py`: Script to create the database tables.
+*   `seed_data.py`: Script to populate the database with sample data.
 *   `requirements.txt`: Lists the Python dependencies required to run the project.
 
 ## How to Run
@@ -51,7 +60,7 @@ The project is organized into a modular structure:
     ```
 
 3.  **Seed the Database (Optional)**:
-    To populate the database with some sample data, run:
+    To populate the database with some sample data for demonstration, run:
     ```bash
     python seed_data.py
     ```
