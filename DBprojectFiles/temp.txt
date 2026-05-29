@@ -1,0 +1,289 @@
+
+
+Before we write actual triggers, it’s crucial to list all possible trigger instances for your database. Triggers are generally used to:
+
+Automatically update related tables
+
+Maintain history/audit tables
+
+Enforce consistency or calculations
+
+Restrict invalid operations
+
+I’ll go table by table in order, starting with the first table, and list all possible trigger events. Later, we can implement them one by one.
+
+1️⃣ categories table
+
+Trigger Instances:
+
+AFTER INSERT → Log creation of a new category in a categories_history table (if you want audit).
+
+AFTER UPDATE → Log any updates (brand, model, type, screen_size, color).
+
+BEFORE DELETE → Prevent deletion if products exist under this category.
+
+AFTER DELETE → Optionally log deletion in categories_history.
+
+2️⃣ suppliers table
+
+Trigger Instances:
+
+AFTER INSERT → Add to suppliers_history for tracking new suppliers.
+
+AFTER UPDATE → Log changes to supplier details.
+
+BEFORE DELETE → Prevent deletion if products exist from this supplier.
+
+AFTER DELETE → Log deletion in suppliers_history.
+
+3️⃣ products table
+
+Trigger Instances:
+
+AFTER INSERT →
+
+Update inventory (initial stock 0 or based on first purchase).
+
+Insert into products_history with change_type = 'add'.
+
+AFTER UPDATE →
+
+Insert into products_history with change_type = 'edit'.
+
+Update inventory unit_cost or derived values if cost_price changed.
+
+BEFORE DELETE → Prevent deletion if orders, stocks, or sales exist.
+
+AFTER DELETE → Insert into products_history with change_type = 'delete'.
+
+4️⃣ staff table
+
+Trigger Instances:
+
+AFTER INSERT → Log in staff_history if maintained.
+
+AFTER UPDATE →
+
+Track role change.
+
+Track location change.
+
+BEFORE DELETE → Prevent deletion if staff is referenced in orders, invoices, stocks, etc.
+
+AFTER DELETE → Optionally log in staff_history.
+
+5️⃣ products_history table
+
+Usually no triggers here (it’s already a history table).
+
+6️⃣ orders table
+
+Trigger Instances:
+
+AFTER INSERT →
+
+Automatically generate order_items if pre-populated.
+
+Update inventory (subtract reserved quantities).
+
+Optionally log in orders_history.
+
+AFTER UPDATE →
+
+Update orders_history with change_type = edit.
+
+Update inventory if order status changes (e.g., returned).
+
+BEFORE DELETE → Prevent deletion if sales or invoice already created.
+
+AFTER DELETE → Log deletion in orders_history.
+
+7️⃣ order_items table
+
+Trigger Instances:
+
+AFTER INSERT →
+
+Update stocks and inventory to deduct sold quantity.
+
+Insert into order_items_history if needed.
+
+AFTER UPDATE → Adjust inventory and stocks if qty or unit_price changed.
+
+BEFORE DELETE → Prevent deletion if sales or returns exist.
+
+AFTER DELETE → Adjust inventory/stock and log history.
+
+8️⃣ orders_history table
+
+Already a history table; triggers mostly happen on orders.
+
+9️⃣ returns table
+
+Trigger Instances:
+
+AFTER INSERT →
+
+Update stocks and inventory to add returned quantity.
+
+Adjust sales table (negative amount).
+
+Update orders_history to mark returned status.
+
+AFTER UPDATE → Track changes in returns_history if maintained.
+
+BEFORE DELETE → Prevent deletion if linked to return_items or sales.
+
+AFTER DELETE → Update inventory and log history.
+
+🔟 return_items table
+
+Trigger Instances:
+
+AFTER INSERT →
+
+Add returned quantity to stocks and inventory.
+
+Update sales with negative amount.
+
+AFTER UPDATE → Adjust stocks and inventory if qty_returned changes.
+
+BEFORE DELETE → Prevent deletion if linked to invoices.
+
+AFTER DELETE → Adjust stocks and inventory.
+
+1️⃣1️⃣ locations table
+
+Trigger Instances:
+
+AFTER INSERT → Initialize stocks/inventory or staff assignments if needed.
+
+AFTER UPDATE → Track changes in location_status (active/inactive/closed).
+
+BEFORE DELETE → Prevent deletion if linked with staff, orders, stocks, or inventory.
+
+1️⃣2️⃣ stocks table
+
+Trigger Instances:
+
+AFTER INSERT → Update inventory total quantity for the product.
+
+AFTER UPDATE → Adjust inventory if qty_stocked changes.
+
+BEFORE DELETE → Prevent deletion if sales exist.
+
+AFTER DELETE → Update inventory to remove quantity.
+
+1️⃣3️⃣ stocks_history table
+
+Mainly triggered by stocks changes. No triggers on this table itself.
+
+1️⃣4️⃣ inventory table
+
+Trigger Instances:
+
+AFTER UPDATE → Update inventory_history for tracking changes.
+
+1️⃣5️⃣ inventory_history table
+
+Triggered by inventory changes; no triggers on itself.
+
+1️⃣6️⃣ purchases table
+
+Trigger Instances:
+
+AFTER INSERT →
+
+Add purchased quantity to stocks of relevant location.
+
+Update inventory.
+
+Log in stocks_history and inventory_history.
+
+AFTER UPDATE → Adjust stocks and inventory if quantity or unit_cost changes.
+
+BEFORE DELETE → Prevent deletion if inventory already updated.
+
+AFTER DELETE → Reverse the stock and inventory adjustments.
+
+1️⃣7️⃣ stock_movement_records table
+
+Trigger Instances:
+
+AFTER INSERT →
+
+Deduct quantity from from_location stock.
+
+Add quantity to to_location stock.
+
+Update inventory.
+
+AFTER UPDATE → Adjust stock movement if quantity_moved changes.
+
+BEFORE DELETE → Prevent deletion if stock movement is confirmed.
+
+AFTER DELETE → Reverse stock changes.
+
+1️⃣8️⃣ stock_movement_history table
+
+Triggered by stock_movement_records. No triggers on itself.
+
+1️⃣9️⃣ roles table
+
+Trigger Instances:
+
+BEFORE DELETE → Prevent deletion if staff exists with this role.
+
+AFTER UPDATE → Optionally log role name changes in a roles_history.
+
+2️⃣0️⃣ invoices table
+
+Trigger Instances:
+
+AFTER INSERT →
+
+Create related order if new customer.
+
+Update stocks and inventory with sold quantities.
+
+Insert related sales records.
+
+AFTER UPDATE → Track edits in invoice_history if implemented.
+
+BEFORE DELETE → Prevent deletion if linked sales exist.
+
+2️⃣1️⃣ invoice_items table
+
+Trigger Instances:
+
+AFTER INSERT → Update stocks and inventory.
+
+AFTER UPDATE → Adjust stock if quantity/unit_price changes.
+
+BEFORE DELETE → Prevent deletion if linked to sales.
+
+AFTER DELETE → Reverse stock and inventory changes.
+
+2️⃣2️⃣ sales table
+
+Trigger Instances:
+
+AFTER INSERT → Update inventory and stocks (positive for sales, negative for returns).
+
+AFTER UPDATE → Adjust inventory and net_profit_loss if quantity/amount changes.
+
+AFTER DELETE → Reverse inventory adjustments.
+
+2️⃣3️⃣ sales_history table
+
+Triggered by sales changes. No triggers on itself.
+
+💡 Summary of main trigger types:
+
+AFTER INSERT: Auto-update related tables, create history, update inventory/stocks, generate sales.
+
+AFTER UPDATE: Track changes, recalculate derived fields, update history.
+
+BEFORE DELETE: Prevent deletion if dependencies exist.
+
+AFTER DELETE: Reverse updates and log history.

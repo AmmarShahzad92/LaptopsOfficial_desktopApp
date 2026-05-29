@@ -1,0 +1,415 @@
+CREATE TABLE categories (
+    category_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    category_brand  TEXT NOT NULL,
+    model_name      TEXT NOT NULL,
+    product_type    TEXT NOT NULL CHECK (product_type IN ('laptop', 'desktop', 'tower')),
+    screen_size     REAL CHECK (screen_size > 0),
+    color           TEXT,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE (category_brand, model_name, product_type)
+);
+CREATE TABLE suppliers (
+    supplier_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    supplier_name      TEXT NOT NULL,
+    contact_no         TEXT NOT NULL,
+    email              TEXT UNIQUE,
+    warehouse_address  TEXT NOT NULL,
+    bank_ac_no         TEXT NOT NULL,
+
+    created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at         DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE products (
+    product_id          TEXT PRIMARY KEY,
+    product_name        TEXT NOT NULL,
+
+    category_id         TEXT NOT NULL,
+    supplier_id         INTEGER NOT NULL,
+
+    screen_size         REAL CHECK (screen_size IN (13.3, 14, 15.6, 17)),
+    color               TEXT,
+    processor           TEXT,
+    ram                 TEXT,
+    primary_storage     TEXT,
+    secondary_storage   TEXT,
+    gpu                 TEXT,
+
+    cost_price          REAL NOT NULL CHECK (cost_price >= 0),
+    wholesale_price     REAL NOT NULL CHECK (wholesale_price >= cost_price),
+    sale_price          REAL NOT NULL CHECK (sale_price >= wholesale_price),
+
+    is_active           INTEGER DEFAULT 1,
+
+    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (category_id) REFERENCES categories(category_id),
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(supplier_id)
+);
+CREATE TABLE IF NOT EXISTS customers (      --missed by ammar
+    customer_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_name   TEXT NOT NULL,
+    contact_no      TEXT,
+    email           TEXT UNIQUE,
+    address         TEXT,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE staff (
+    staff_id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    staff_name        TEXT NOT NULL,
+    role_id           INTEGER NOT NULL,
+    location_id       INTEGER NOT NULL,
+    staff_contact     TEXT NOT NULL,
+    staff_email       TEXT UNIQUE NOT NULL,
+    staff_cnic        TEXT UNIQUE NOT NULL,
+    staff_bank_acno   TEXT NOT NULL,
+    staff_salary      REAL CHECK (staff_salary >= 0),
+    
+    staff_hiring_date DATE NOT NULL,
+    staff_work_exp    INTEGER GENERATED ALWAYS AS 
+                       (strftime('%Y', 'now') - strftime('%Y', staff_hiring_date)) STORED,
+    staff_status      TEXT DEFAULT 'active' CHECK (staff_status IN ('active','inactive','suspended')),
+
+    created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (role_id) REFERENCES roles(role_id),
+    FOREIGN KEY (location_id) REFERENCES locations(location_id)
+);
+CREATE TABLE products_history (
+    ph_id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id        TEXT NOT NULL,
+    
+    old_cost          REAL,
+    new_cost          REAL,
+    old_wholesale     REAL,
+    new_wholesale     REAL,
+    old_sale          REAL,
+    new_sale          REAL,
+    old_qty           INTEGER,
+    new_qty           INTEGER,
+    
+    change_type       TEXT NOT NULL CHECK (change_type IN ('add','edit','delete')),
+    changed_by        INTEGER NOT NULL,
+    changed_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+    remarks           TEXT,
+
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (changed_by) REFERENCES staff(staff_id)
+);
+CREATE TABLE orders (
+    order_id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id       INTEGER NOT NULL,
+    order_date        DATETIME DEFAULT CURRENT_TIMESTAMP,
+    order_type        TEXT NOT NULL CHECK (order_type IN ('online','physical')),
+    location_id       INTEGER NOT NULL,
+    status            TEXT NOT NULL CHECK (status IN ('processing','delivered','returned')),
+    subtotal          REAL NOT NULL CHECK (subtotal >= 0),
+    shipping_fee      REAL DEFAULT 0 CHECK (shipping_fee >= 0),
+    total             REAL GENERATED ALWAYS AS (subtotal + shipping_fee) STORED,
+    payment_method    TEXT NOT NULL CHECK (payment_method IN ('cash','card','bank_transfer')),
+    delivery_method   TEXT CHECK (delivery_method IN ('take_away','home_delivery')),
+
+    created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
+    FOREIGN KEY (location_id) REFERENCES locations(location_id)
+);
+CREATE TABLE order_items (
+    item_id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id          INTEGER NOT NULL,
+    product_id        TEXT NOT NULL,
+    qty               INTEGER NOT NULL CHECK (qty > 0),
+    unit_price        REAL NOT NULL CHECK (unit_price >= 0),
+    order_line_amount REAL GENERATED ALWAYS AS (qty * unit_price) STORED,
+    created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (order_id) REFERENCES orders(order_id),
+    FOREIGN KEY (product_id) REFERENCES products(product_id)
+);
+CREATE TABLE returns (
+    return_id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id          INTEGER NOT NULL,
+    customer_id       INTEGER NOT NULL,
+    location_id       INTEGER NOT NULL,
+    return_date       DATETIME DEFAULT CURRENT_TIMESTAMP,
+    order_date        DATETIME NOT NULL,
+    return_amount     REAL NOT NULL CHECK (return_amount >= 0),
+    return_reason     TEXT NOT NULL CHECK (return_reason IN ('damaged','wrong_order','warranty_claim')),
+    notes             TEXT,
+
+    FOREIGN KEY (order_id) REFERENCES orders(order_id),
+    FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
+    FOREIGN KEY (location_id) REFERENCES locations(location_id)
+);
+CREATE TABLE return_items (
+    ri_id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    return_id         INTEGER NOT NULL,
+    item_id           INTEGER NOT NULL,
+    qty_bought        INTEGER NOT NULL CHECK (qty_bought >= 0),
+    qty_returned      INTEGER NOT NULL CHECK (qty_returned >= 0 AND qty_returned <= qty_bought),
+    unit_price        REAL NOT NULL CHECK (unit_price >= 0),
+    return_line_amount REAL GENERATED ALWAYS AS (qty_returned * unit_price) STORED,
+    notes             TEXT,
+    created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (return_id) REFERENCES returns(return_id),
+    FOREIGN KEY (item_id) REFERENCES order_items(item_id)
+);
+CREATE TABLE locations (
+    location_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    location_name     TEXT NOT NULL,
+    location_type     TEXT NOT NULL CHECK (location_type IN ('store','platform','warehouse')),
+    address           TEXT,
+    contact_no        TEXT,
+    managed_by        INTEGER,
+    staff_capacity    INTEGER DEFAULT 0 CHECK (staff_capacity >= 0),
+    location_status   TEXT DEFAULT 'active' CHECK (location_status IN ('active','inactive','closed')),
+    created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (managed_by) REFERENCES staff(staff_id)
+);
+CREATE TABLE stocks (
+    stock_id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id        TEXT NOT NULL,
+    location_id       INTEGER NOT NULL,
+    qty_stocked       INTEGER NOT NULL CHECK (qty_stocked >= 0),
+    unit_cost         REAL NOT NULL CHECK (unit_cost >= 0),
+    stock_line_amount REAL GENERATED ALWAYS AS (qty_stocked * unit_cost) STORED,
+    manager_id        INTEGER,
+    created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (location_id) REFERENCES locations(location_id),
+    FOREIGN KEY (manager_id) REFERENCES staff(staff_id)
+);
+CREATE TABLE inventory (
+    inventory_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id        TEXT NOT NULL,
+    total_qty         INTEGER NOT NULL CHECK (total_qty >= 0),
+    unit_cost         REAL NOT NULL CHECK (unit_cost >= 0),
+    inventory_amount  REAL GENERATED ALWAYS AS (total_qty * unit_cost) STORED,
+    last_updated      DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (product_id) REFERENCES products(product_id)
+);
+CREATE TABLE purchases (
+    purchase_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    supplier_id       INTEGER NOT NULL,
+    product_id        TEXT NOT NULL,
+    quantity          INTEGER NOT NULL CHECK (quantity > 0),
+    unit_cost         REAL NOT NULL CHECK (unit_cost >= 0),
+    total_amount      REAL GENERATED ALWAYS AS (quantity * unit_cost) STORED,
+    purchase_date     DATETIME DEFAULT CURRENT_TIMESTAMP,
+    received_by       INTEGER NOT NULL,
+    location_id       INTEGER NOT NULL,
+    remarks           TEXT,
+
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(supplier_id),
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (received_by) REFERENCES staff(staff_id),
+    FOREIGN KEY (location_id) REFERENCES locations(location_id)
+);
+CREATE TABLE stock_movement_records (
+    smr_id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id        TEXT NOT NULL,
+    from_location_id  INTEGER NOT NULL,
+    to_location_id    INTEGER NOT NULL,
+    quantity_moved    INTEGER NOT NULL CHECK (quantity_moved > 0),
+    unit_cost         REAL NOT NULL CHECK (unit_cost >= 0),
+    movement_amount   REAL GENERATED ALWAYS AS (quantity_moved * unit_cost) STORED,
+    approved_by       INTEGER NOT NULL,
+    movement_date     DATETIME DEFAULT CURRENT_TIMESTAMP,
+    remarks           TEXT,
+
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (from_location_id) REFERENCES locations(location_id),
+    FOREIGN KEY (to_location_id) REFERENCES locations(location_id),
+    FOREIGN KEY (approved_by) REFERENCES staff(staff_id)
+);
+CREATE TABLE roles (
+    role_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    role_name    TEXT NOT NULL UNIQUE,
+    description  TEXT,
+    created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE invoices (
+    invoice_id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id           INTEGER,                       -- will be created automatically when invoice is processed
+    customer_id        INTEGER,                       -- can be NULL temporarily if new customer is added
+    customer_name      TEXT,                          -- input if new customer
+    customer_contact   TEXT,                          -- input if new customer
+    customer_email     TEXT,                          -- optional input
+    invoice_date       DATETIME DEFAULT CURRENT_TIMESTAMP,
+    payment_method     TEXT NOT NULL CHECK (payment_method IN ('cash','card','bank_transfer')),
+    delivery_method    TEXT CHECK (delivery_method IN ('take_away','home_delivery')),
+    subtotal           REAL NOT NULL CHECK (subtotal >= 0),
+    shipping_fee       REAL DEFAULT 0 CHECK (shipping_fee >= 0),
+    discount_amount    REAL DEFAULT 0 CHECK (discount_amount >= 0),
+    grand_total        REAL GENERATED ALWAYS AS (subtotal + shipping_fee - discount_amount) STORED,
+    created_by         INTEGER NOT NULL,             -- staff_id
+    location_id        INTEGER NOT NULL,
+    notes              TEXT,
+    created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (order_id) REFERENCES orders(order_id),
+    FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
+    FOREIGN KEY (created_by) REFERENCES staff(staff_id),
+    FOREIGN KEY (location_id) REFERENCES locations(location_id)
+);
+CREATE TABLE invoice_items (
+    invoice_item_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    invoice_id         INTEGER NOT NULL,
+    order_item_id      INTEGER,                     -- links to order_items if already created
+    product_id         TEXT NOT NULL,
+    quantity_sold      INTEGER NOT NULL CHECK (quantity_sold > 0),
+    unit_price         REAL NOT NULL CHECK (unit_price >= 0),
+    line_total         REAL GENERATED ALWAYS AS (quantity_sold * unit_price) STORED,
+    created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (invoice_id) REFERENCES invoices(invoice_id),
+    FOREIGN KEY (order_item_id) REFERENCES order_items(item_id),
+    FOREIGN KEY (product_id) REFERENCES products(product_id)
+);
+CREATE TABLE sales (
+    sales_id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id           INTEGER,                        -- FK to orders
+    order_item_id      INTEGER,                        -- FK to order_items
+    return_id          INTEGER,                        -- FK to returns (nullable)
+    return_item_id     INTEGER,                        -- FK to return_items (nullable)
+    product_id         TEXT NOT NULL,                  -- FK to products
+    quantity           INTEGER NOT NULL CHECK (quantity > 0),
+    cost_price         REAL NOT NULL CHECK (cost_price >= 0),
+    wholesale_price    REAL NOT NULL CHECK (wholesale_price >= 0),
+    sales_price        REAL NOT NULL CHECK (sales_price >= 0),
+    amount             REAL NOT NULL,                 -- positive for sale, negative for return
+    profit_loss        REAL GENERATED ALWAYS AS (amount - (cost_price * quantity)) STORED,
+    net_profit_loss    REAL GENERATED ALWAYS AS (SUM(profit_loss) OVER (PARTITION BY order_id)) STORED,
+    sale_date          DATETIME DEFAULT CURRENT_TIMESTAMP,
+    location_id        INTEGER NOT NULL,
+    created_by         INTEGER NOT NULL,               -- staff who logged the sale
+    notes              TEXT,
+
+    FOREIGN KEY (order_id) REFERENCES orders(order_id),
+    FOREIGN KEY (order_item_id) REFERENCES order_items(item_id),
+    FOREIGN KEY (return_id) REFERENCES returns(return_id),
+    FOREIGN KEY (return_item_id) REFERENCES return_items(ri_id),
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (location_id) REFERENCES locations(location_id),
+    FOREIGN KEY (created_by) REFERENCES staff(staff_id)
+);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+CREATE TABLE orders_history (
+    oh_id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id          INTEGER NOT NULL,
+    customer_id       INTEGER NOT NULL,
+    order_date        DATETIME NOT NULL,
+    order_type        TEXT NOT NULL CHECK (order_type IN ('online','physical')),
+    location_id       INTEGER NOT NULL,
+    status            TEXT NOT NULL CHECK (status IN ('processing','delivered','returned')),
+    subtotal          REAL NOT NULL CHECK (subtotal >= 0),
+    shipping_fee      REAL DEFAULT 0 CHECK (shipping_fee >= 0),
+    total             REAL NOT NULL,
+    payment_method    TEXT NOT NULL CHECK (payment_method IN ('cash','card','bank_transfer')),
+    delivery_method   TEXT CHECK (delivery_method IN ('take_away','home_delivery')),
+    changed_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+    changed_by        INTEGER NOT NULL,
+    change_type       TEXT NOT NULL CHECK (change_type IN ('add','edit','delete')),
+    remarks           TEXT,
+
+    FOREIGN KEY (order_id) REFERENCES orders(order_id),
+    FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
+    FOREIGN KEY (location_id) REFERENCES locations(location_id),
+    FOREIGN KEY (changed_by) REFERENCES staff(staff_id)
+);
+CREATE TABLE stocks_history (
+    sh_id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    stock_id          INTEGER NOT NULL,
+    product_id        TEXT NOT NULL,
+    location_id       INTEGER NOT NULL,
+    old_qty           INTEGER NOT NULL CHECK (old_qty >= 0),
+    new_qty           INTEGER NOT NULL CHECK (new_qty >= 0),
+    change_type       TEXT NOT NULL CHECK (change_type IN ('add','remove','adjust')),
+    changed_by        INTEGER NOT NULL,
+    changed_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+    remarks           TEXT,
+
+    FOREIGN KEY (stock_id) REFERENCES stocks(stock_id),
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (location_id) REFERENCES locations(location_id),
+    FOREIGN KEY (changed_by) REFERENCES staff(staff_id)
+);
+CREATE TABLE inventory_history (
+    ih_id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    inventory_id      INTEGER NOT NULL,
+    product_id        TEXT NOT NULL,
+    old_total_qty     INTEGER NOT NULL CHECK (old_total_qty >= 0),
+    new_total_qty     INTEGER NOT NULL CHECK (new_total_qty >= 0),
+    change_type       TEXT NOT NULL CHECK (change_type IN ('add','remove','adjust')),
+    changed_by        INTEGER NOT NULL,
+    changed_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+    remarks           TEXT,
+
+    FOREIGN KEY (inventory_id) REFERENCES inventory(inventory_id),
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (changed_by) REFERENCES staff(staff_id)
+);
+CREATE TABLE stock_movement_history (
+    smh_id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    smr_id            INTEGER NOT NULL,
+    product_id        TEXT NOT NULL,
+    from_location_id  INTEGER NOT NULL,
+    to_location_id    INTEGER NOT NULL,
+    old_quantity      INTEGER NOT NULL CHECK (old_quantity >= 0),
+    new_quantity      INTEGER NOT NULL CHECK (new_quantity >= 0),
+    change_type       TEXT NOT NULL CHECK (change_type IN ('add','remove','adjust')),
+    changed_by        INTEGER NOT NULL,
+    changed_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+    remarks           TEXT,
+
+    FOREIGN KEY (smr_id) REFERENCES stock_movement_records(smr_id),
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (from_location_id) REFERENCES locations(location_id),
+    FOREIGN KEY (to_location_id) REFERENCES locations(location_id),
+    FOREIGN KEY (changed_by) REFERENCES staff(staff_id)
+);
+CREATE TABLE sales_history (
+    sh_id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    sales_id           INTEGER NOT NULL,
+    old_quantity       INTEGER NOT NULL,
+    new_quantity       INTEGER NOT NULL,
+    old_amount         REAL NOT NULL,
+    new_amount         REAL NOT NULL,
+    change_type        TEXT NOT NULL CHECK (change_type IN ('add','edit','delete')),
+    changed_by         INTEGER NOT NULL,
+    changed_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+    remarks            TEXT,
+
+    FOREIGN KEY (sales_id) REFERENCES sales(sales_id),
+    FOREIGN KEY (changed_by) REFERENCES staff(staff_id)
+);
+

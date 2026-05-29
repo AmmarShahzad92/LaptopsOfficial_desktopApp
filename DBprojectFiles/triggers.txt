@@ -1,0 +1,1910 @@
+--categories
+CREATE TABLE IF NOT EXISTS categories_history (
+    ch_id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    category_id    INTEGER NOT NULL,
+    category_brand TEXT NOT NULL,
+    model_name     TEXT NOT NULL,
+    product_type   TEXT NOT NULL,
+    screen_size    REAL,
+    color          TEXT,
+    change_type    TEXT NOT NULL CHECK (change_type IN ('add','edit','delete')),
+    changed_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Trigger: AFTER INSERT
+CREATE TRIGGER trg_categories_after_insert
+AFTER INSERT ON categories
+FOR EACH ROW
+BEGIN
+    INSERT INTO categories_history(
+        category_id, category_brand, model_name, product_type, screen_size, color, change_type
+    )
+    VALUES (
+        NEW.category_id, NEW.category_brand, NEW.model_name, NEW.product_type, NEW.screen_size, NEW.color, 'add'
+    );
+END;
+CREATE TRIGGER trg_categories_after_update
+AFTER UPDATE ON categories
+FOR EACH ROW
+BEGIN
+    INSERT INTO categories_history(
+        category_id, category_brand, model_name, product_type, screen_size, color, change_type
+    )
+    VALUES (
+        NEW.category_id, NEW.category_brand, NEW.model_name, NEW.product_type, NEW.screen_size, NEW.color, 'edit'
+    );
+END;
+CREATE TRIGGER trg_categories_before_delete
+BEFORE DELETE ON categories
+FOR EACH ROW
+BEGIN
+    SELECT
+        CASE
+            WHEN EXISTS (
+                SELECT 1 FROM products WHERE category_id = OLD.category_id
+            )
+            THEN
+                RAISE(ABORT, 'Cannot delete category; products exist under this category')
+        END;
+END;
+CREATE TRIGGER trg_categories_after_delete
+AFTER DELETE ON categories
+FOR EACH ROW
+BEGIN
+    INSERT INTO categories_history(
+        category_id, category_brand, model_name, product_type, screen_size, color, change_type
+    )
+    VALUES (
+        OLD.category_id, OLD.category_brand, OLD.model_name, OLD.product_type, OLD.screen_size, OLD.color, 'delete'
+    );
+END;
+
+
+--suppliers
+CREATE TABLE IF NOT EXISTS suppliers_history (
+    sh_id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    supplier_id     INTEGER NOT NULL,
+    supplier_name   TEXT NOT NULL,
+    contact_no      TEXT NOT NULL,
+    email           TEXT,
+    warehouse_address TEXT,
+    bank_ac_no      TEXT,
+    change_type     TEXT NOT NULL CHECK (change_type IN ('add','edit','delete')),
+    changed_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Trigger: AFTER INSERT
+CREATE TRIGGER trg_suppliers_after_insert
+AFTER INSERT ON suppliers
+FOR EACH ROW
+BEGIN
+    INSERT INTO suppliers_history(
+        supplier_id, supplier_name, contact_no, email, warehouse_address, bank_ac_no, change_type
+    )
+    VALUES (
+        NEW.supplier_id, NEW.supplier_name, NEW.contact_no, NEW.email, NEW.warehouse_address, NEW.bank_ac_no, 'add'
+    );
+END;
+CREATE TRIGGER trg_suppliers_after_update
+AFTER UPDATE ON suppliers
+FOR EACH ROW
+BEGIN
+    INSERT INTO suppliers_history(
+        supplier_id, supplier_name, contact_no, email, warehouse_address, bank_ac_no, change_type
+    )
+    VALUES (
+        NEW.supplier_id, NEW.supplier_name, NEW.contact_no, NEW.email, NEW.warehouse_address, NEW.bank_ac_no, 'edit'
+    );
+END;
+CREATE TRIGGER trg_suppliers_before_delete
+BEFORE DELETE ON suppliers
+FOR EACH ROW
+BEGIN
+    SELECT
+        CASE
+            WHEN EXISTS (
+                SELECT 1 FROM products WHERE supplier_id = OLD.supplier_id
+            )
+            OR EXISTS (
+                SELECT 1 FROM purchases WHERE supplier_id = OLD.supplier_id
+            )
+            THEN
+                RAISE(ABORT, 'Cannot delete supplier; linked products or purchases exist')
+        END;
+END;
+CREATE TRIGGER trg_suppliers_after_delete
+AFTER DELETE ON suppliers
+FOR EACH ROW
+BEGIN
+    INSERT INTO suppliers_history(
+        supplier_id, supplier_name, contact_no, email, warehouse_address, bank_ac_no, change_type
+    )
+    VALUES (
+        OLD.supplier_id, OLD.supplier_name, OLD.contact_no, OLD.email, OLD.warehouse_address, OLD.bank_ac_no, 'delete'
+    );
+END;
+
+
+--products
+CREATE TRIGGER trg_products_after_insert
+AFTER INSERT ON products
+FOR EACH ROW
+BEGIN
+    INSERT INTO products_history(
+        product_id,
+        old_cost, new_cost,
+        old_wholesale, new_wholesale,
+        old_sale, new_sale,
+        old_qty, new_qty,
+        change_type,
+        changed_by,
+        remarks
+    )
+    VALUES (
+        NEW.product_id,
+        NULL, NEW.cost_price,
+        NULL, NEW.wholesale_price,
+        NULL, NEW.sale_price,
+        NULL, NEW.quantity,
+        'add',
+        NULL,               -- Will be set in application during insert if known
+        'New product added'
+    );
+END;
+CREATE TRIGGER trg_products_after_update
+AFTER UPDATE ON products
+FOR EACH ROW
+BEGIN
+    INSERT INTO products_history(
+        product_id,
+        old_cost, new_cost,
+        old_wholesale, new_wholesale,
+        old_sale, new_sale,
+        old_qty, new_qty,
+        change_type,
+        changed_by,
+        remarks
+    )
+    VALUES (
+        OLD.product_id,
+        OLD.cost_price, NEW.cost_price,
+        OLD.wholesale_price, NEW.wholesale_price,
+        OLD.sale_price, NEW.sale_price,
+        OLD.quantity, NEW.quantity,
+        'edit',
+        NULL,               -- Set by application if known
+        'Product updated'
+    );
+END;
+CREATE TRIGGER trg_products_before_delete
+BEFORE DELETE ON products
+FOR EACH ROW
+BEGIN
+    SELECT
+        CASE
+            WHEN EXISTS (SELECT 1 FROM order_items WHERE product_id = OLD.product_id)
+            OR EXISTS (SELECT 1 FROM stocks WHERE product_id = OLD.product_id)
+            OR EXISTS (SELECT 1 FROM purchases WHERE product_id = OLD.product_id)
+            OR EXISTS (SELECT 1 FROM return_items WHERE product_id = OLD.product_id)
+            THEN
+                RAISE(ABORT, 'Cannot delete product; linked order items, stocks, purchases, or returns exist')
+        END;
+END;
+CREATE TRIGGER trg_products_after_delete
+AFTER DELETE ON products
+FOR EACH ROW
+BEGIN
+    INSERT INTO products_history(
+        product_id,
+        old_cost, new_cost,
+        old_wholesale, new_wholesale,
+        old_sale, new_sale,
+        old_qty, new_qty,
+        change_type,
+        changed_by,
+        remarks
+    )
+    VALUES (
+        OLD.product_id,
+        OLD.cost_price, NULL,
+        OLD.wholesale_price, NULL,
+        OLD.sale_price, NULL,
+        OLD.quantity, NULL,
+        'delete',
+        NULL,
+        'Product deleted'
+    );
+END;
+
+
+--staff
+CREATE TRIGGER trg_staff_after_insert
+AFTER INSERT ON staff
+FOR EACH ROW
+BEGIN
+    INSERT INTO staff_history(
+        staff_id,
+        staff_name,
+        role_id,
+        location_id,
+        staff_contact,
+        staff_email,
+        staff_cnic,
+        staff_bank_acno,
+        staff_salary,
+        staff_hiring_date,
+        staff_work_exp,
+        staff_status,
+        change_type,
+        changed_by,
+        remarks
+    )
+    VALUES (
+        NEW.staff_id,
+        NEW.staff_name,
+        NEW.role_id,
+        NEW.location_id,
+        NEW.staff_contact,
+        NEW.staff_email,
+        NEW.staff_cnic,
+        NEW.staff_bank_acno,
+        NEW.staff_salary,
+        NEW.staff_hiring_date,
+        NEW.staff_work_exp,
+        NEW.staff_status,
+        'add',
+        NULL, -- Application can pass ID of admin creating staff
+        'New staff member added'
+    );
+END;
+CREATE TRIGGER trg_staff_after_update
+AFTER UPDATE ON staff
+FOR EACH ROW
+BEGIN
+    INSERT INTO staff_history(
+        staff_id,
+        staff_name,
+        role_id,
+        location_id,
+        staff_contact,
+        staff_email,
+        staff_cnic,
+        staff_bank_acno,
+        staff_salary,
+        staff_hiring_date,
+        staff_work_exp,
+        staff_status,
+        change_type,
+        changed_by,
+        remarks
+    )
+    VALUES (
+        OLD.staff_id,
+        OLD.staff_name,
+        OLD.role_id,
+        OLD.location_id,
+        OLD.staff_contact,
+        OLD.staff_email,
+        OLD.staff_cnic,
+        OLD.staff_bank_acno,
+        OLD.staff_salary,
+        OLD.staff_hiring_date,
+        OLD.staff_work_exp,
+        OLD.staff_status,
+        'edit',
+        NULL, -- Application can pass ID of admin editing staff
+        'Staff member details updated'
+    );
+END;
+CREATE TRIGGER trg_staff_before_delete
+BEFORE DELETE ON staff
+FOR EACH ROW
+BEGIN
+    SELECT
+        CASE
+            WHEN EXISTS (SELECT 1 FROM locations WHERE managed_by = OLD.staff_id)
+            OR EXISTS (SELECT 1 FROM orders WHERE created_by = OLD.staff_id)
+            OR EXISTS (SELECT 1 FROM invoices WHERE created_by = OLD.staff_id)
+            OR EXISTS (SELECT 1 FROM purchases WHERE received_by = OLD.staff_id)
+            OR EXISTS (SELECT 1 FROM stock_movement_records WHERE approved_by = OLD.staff_id)
+            THEN
+                RAISE(ABORT, 'Cannot delete staff; linked records exist')
+        END;
+END;
+
+
+--locations
+CREATE TRIGGER trg_locations_after_insert
+AFTER INSERT ON locations
+FOR EACH ROW
+BEGIN
+    INSERT INTO locations_history(
+        location_id,
+        location_name,
+        location_type,
+        address,
+        contact_no,
+        managed_by,
+        staff_capacity,
+        location_status,
+        change_type,
+        changed_by,
+        remarks,
+        changed_at
+    )
+    VALUES (
+        NEW.location_id,
+        NEW.location_name,
+        NEW.location_type,
+        NEW.address,
+        NEW.contact_no,
+        NEW.managed_by,
+        NEW.staff_capacity,
+        NEW.location_status,
+        'add',
+        NULL, -- Application can provide admin/staff ID adding the location
+        'New location added',
+        CURRENT_TIMESTAMP
+    );
+END;
+CREATE TRIGGER trg_locations_after_update
+AFTER UPDATE ON locations
+FOR EACH ROW
+BEGIN
+    INSERT INTO locations_history(
+        location_id,
+        location_name,
+        location_type,
+        address,
+        contact_no,
+        managed_by,
+        staff_capacity,
+        location_status,
+        change_type,
+        changed_by,
+        remarks,
+        changed_at
+    )
+    VALUES (
+        OLD.location_id,
+        OLD.location_name,
+        OLD.location_type,
+        OLD.address,
+        OLD.contact_no,
+        OLD.managed_by,
+        OLD.staff_capacity,
+        OLD.location_status,
+        'edit',
+        NULL, -- Application can provide admin/staff ID updating the location
+        'Location details updated',
+        CURRENT_TIMESTAMP
+    );
+END;
+CREATE TRIGGER trg_locations_before_delete
+BEFORE DELETE ON locations
+FOR EACH ROW
+BEGIN
+    SELECT
+        CASE
+            WHEN EXISTS (SELECT 1 FROM stocks WHERE location_id = OLD.location_id)
+            OR EXISTS (SELECT 1 FROM orders WHERE location_id = OLD.location_id)
+            OR EXISTS (SELECT 1 FROM invoices WHERE location_id = OLD.location_id)
+            OR EXISTS (SELECT 1 FROM staff WHERE location_id = OLD.location_id)
+            OR EXISTS (SELECT 1 FROM purchases WHERE location_id = OLD.location_id)
+            OR EXISTS (SELECT 1 FROM stock_movement_records WHERE from_location_id = OLD.location_id OR to_location_id = OLD.location_id)
+            THEN
+                RAISE(ABORT, 'Cannot delete location; linked records exist')
+        END;
+END;
+
+
+--orders
+CREATE TRIGGER trg_orders_after_insert
+AFTER INSERT ON orders
+FOR EACH ROW
+BEGIN
+    INSERT INTO orders_history(
+        order_id,
+        customer_id,
+        order_date,
+        order_type,
+        location_id,
+        status,
+        subtotal,
+        shipping_fee,
+        total,
+        payment_method,
+        delivery_method,
+        change_type,
+        changed_by,
+        changed_at,
+        remarks
+    )
+    VALUES (
+        NEW.order_id,
+        NEW.customer_id,
+        NEW.order_date,
+        NEW.order_type,
+        NEW.location_id,
+        NEW.status,
+        NEW.subtotal,
+        NEW.shipping_fee,
+        NEW.total,
+        NEW.payment_method,
+        NEW.delivery_method,
+        'add',
+        NULL, -- Can be set to staff_id creating order if needed
+        CURRENT_TIMESTAMP,
+        'New order created'
+    );
+END;
+CREATE TRIGGER trg_orders_after_update
+AFTER UPDATE ON orders
+FOR EACH ROW
+BEGIN
+    INSERT INTO orders_history(
+        order_id,
+        customer_id,
+        order_date,
+        order_type,
+        location_id,
+        status,
+        subtotal,
+        shipping_fee,
+        total,
+        payment_method,
+        delivery_method,
+        change_type,
+        changed_by,
+        changed_at,
+        remarks
+    )
+    VALUES (
+        OLD.order_id,
+        OLD.customer_id,
+        OLD.order_date,
+        OLD.order_type,
+        OLD.location_id,
+        OLD.status,
+        OLD.subtotal,
+        OLD.shipping_fee,
+        OLD.total,
+        OLD.payment_method,
+        OLD.delivery_method,
+        'edit',
+        NULL, -- Can be set to staff_id updating the order
+        CURRENT_TIMESTAMP,
+        'Order updated'
+    );
+END;
+CREATE TRIGGER trg_orders_before_delete
+BEFORE DELETE ON orders
+FOR EACH ROW
+BEGIN
+    SELECT
+        CASE
+            WHEN EXISTS (SELECT 1 FROM order_items WHERE order_id = OLD.order_id)
+            THEN
+                RAISE(ABORT, 'Cannot delete order; order items exist')
+        END;
+END;
+CREATE TRIGGER trg_orders_after_delete
+AFTER DELETE ON orders
+FOR EACH ROW
+BEGIN
+    INSERT INTO orders_history(
+        order_id,
+        customer_id,
+        order_date,
+        order_type,
+        location_id,
+        status,
+        subtotal,
+        shipping_fee,
+        total,
+        payment_method,
+        delivery_method,
+        change_type,
+        changed_by,
+        changed_at,
+        remarks
+    )
+    VALUES (
+        OLD.order_id,
+        OLD.customer_id,
+        OLD.order_date,
+        OLD.order_type,
+        OLD.location_id,
+        OLD.status,
+        OLD.subtotal,
+        OLD.shipping_fee,
+        OLD.total,
+        OLD.payment_method,
+        OLD.delivery_method,
+        'delete',
+        NULL,  -- Can be set to staff_id who performed deletion
+        CURRENT_TIMESTAMP,
+        'Order deleted'
+    );
+END;
+
+
+--order_items
+CREATE TRIGGER trg_order_items_after_insert
+AFTER INSERT ON order_items
+FOR EACH ROW
+BEGIN
+    -- Update inventory table: reduce total_qty
+    UPDATE inventory
+    SET total_qty = total_qty - NEW.qty,
+        inventory_amount = (total_qty - NEW.qty) * unit_cost,
+        last_updated = CURRENT_TIMESTAMP
+    WHERE product_id = NEW.product_id;
+
+    -- Optionally, update stock at specific location
+    UPDATE stocks
+    SET qty_stocked = qty_stocked - NEW.qty,
+        stock_line_amount = (qty_stocked - NEW.qty) * unit_cost,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE product_id = NEW.product_id AND location_id = (SELECT location_id FROM orders WHERE order_id = NEW.order_id);
+
+    -- Insert into orders_history for auditing
+    INSERT INTO orders_history(
+        order_id,
+        customer_id,
+        order_date,
+        order_type,
+        location_id,
+        status,
+        subtotal,
+        shipping_fee,
+        total,
+        payment_method,
+        delivery_method,
+        change_type,
+        changed_by,
+        changed_at,
+        remarks
+    )
+    VALUES (
+        NEW.order_id,
+        (SELECT customer_id FROM orders WHERE order_id = NEW.order_id),
+        (SELECT order_date FROM orders WHERE order_id = NEW.order_id),
+        (SELECT order_type FROM orders WHERE order_id = NEW.order_id),
+        (SELECT location_id FROM orders WHERE order_id = NEW.order_id),
+        (SELECT status FROM orders WHERE order_id = NEW.order_id),
+        (SELECT subtotal FROM orders WHERE order_id = NEW.order_id),
+        (SELECT shipping_fee FROM orders WHERE order_id = NEW.order_id),
+        (SELECT total FROM orders WHERE order_id = NEW.order_id),
+        (SELECT payment_method FROM orders WHERE order_id = NEW.order_id),
+        (SELECT delivery_method FROM orders WHERE order_id = NEW.order_id),
+        'add',
+        NULL,
+        CURRENT_TIMESTAMP,
+        'Order item added'
+    );
+END;
+CREATE TRIGGER trg_order_items_after_insert
+AFTER INSERT ON order_items
+FOR EACH ROW
+BEGIN
+    -- Update inventory
+    UPDATE inventory
+    SET total_qty = total_qty - NEW.qty,
+        inventory_amount = (total_qty - NEW.qty) * unit_cost,
+        last_updated = CURRENT_TIMESTAMP
+    WHERE product_id = NEW.product_id;
+
+    -- Update stocks at location
+    UPDATE stocks
+    SET qty_stocked = qty_stocked - NEW.qty,
+        stock_line_amount = (qty_stocked - NEW.qty) * unit_cost,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE product_id = NEW.product_id
+      AND location_id = (SELECT location_id FROM orders WHERE order_id = NEW.order_id);
+
+    -- Log in orders_history
+    INSERT INTO orders_history(
+        order_id,
+        customer_id,
+        order_date,
+        order_type,
+        location_id,
+        status,
+        subtotal,
+        shipping_fee,
+        total,
+        payment_method,
+        delivery_method,
+        change_type,
+        changed_by,
+        changed_at,
+        remarks
+    )
+    VALUES (
+        NEW.order_id,
+        (SELECT customer_id FROM orders WHERE order_id = NEW.order_id),
+        (SELECT order_date FROM orders WHERE order_id = NEW.order_id),
+        (SELECT order_type FROM orders WHERE order_id = NEW.order_id),
+        (SELECT location_id FROM orders WHERE order_id = NEW.order_id),
+        (SELECT status FROM orders WHERE order_id = NEW.order_id),
+        (SELECT subtotal FROM orders WHERE order_id = NEW.order_id),
+        (SELECT shipping_fee FROM orders WHERE order_id = NEW.order_id),
+        (SELECT total FROM orders WHERE order_id = NEW.order_id),
+        (SELECT payment_method FROM orders WHERE order_id = NEW.order_id),
+        (SELECT delivery_method FROM orders WHERE order_id = NEW.order_id),
+        'add',
+        NULL,
+        CURRENT_TIMESTAMP,
+        'Order item inserted'
+    );
+END;
+CREATE TRIGGER trg_order_items_after_update
+AFTER UPDATE ON order_items
+FOR EACH ROW
+BEGIN
+    -- Adjust inventory
+    UPDATE inventory
+    SET total_qty = total_qty + OLD.qty - NEW.qty,
+        inventory_amount = (total_qty + OLD.qty - NEW.qty) * unit_cost,
+        last_updated = CURRENT_TIMESTAMP
+    WHERE product_id = NEW.product_id;
+
+    -- Adjust stocks at location
+    UPDATE stocks
+    SET qty_stocked = qty_stocked + OLD.qty - NEW.qty,
+        stock_line_amount = (qty_stocked + OLD.qty - NEW.qty) * unit_cost,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE product_id = NEW.product_id
+      AND location_id = (SELECT location_id FROM orders WHERE order_id = NEW.order_id);
+
+    -- Log in orders_history
+    INSERT INTO orders_history(
+        order_id,
+        customer_id,
+        order_date,
+        order_type,
+        location_id,
+        status,
+        subtotal,
+        shipping_fee,
+        total,
+        payment_method,
+        delivery_method,
+        change_type,
+        changed_by,
+        changed_at,
+        remarks
+    )
+    VALUES (
+        NEW.order_id,
+        (SELECT customer_id FROM orders WHERE order_id = NEW.order_id),
+        (SELECT order_date FROM orders WHERE order_id = NEW.order_id),
+        (SELECT order_type FROM orders WHERE order_id = NEW.order_id),
+        (SELECT location_id FROM orders WHERE order_id = NEW.order_id),
+        (SELECT status FROM orders WHERE order_id = NEW.order_id),
+        (SELECT subtotal FROM orders WHERE order_id = NEW.order_id),
+        (SELECT shipping_fee FROM orders WHERE order_id = NEW.order_id),
+        (SELECT total FROM orders WHERE order_id = NEW.order_id),
+        (SELECT payment_method FROM orders WHERE order_id = NEW.order_id),
+        (SELECT delivery_method FROM orders WHERE order_id = NEW.order_id),
+        'edit',
+        NULL,
+        CURRENT_TIMESTAMP,
+        'Order item updated'
+    );
+END;
+CREATE TRIGGER trg_order_items_before_delete
+BEFORE DELETE ON order_items
+FOR EACH ROW
+BEGIN
+    -- Restore inventory
+    UPDATE inventory
+    SET total_qty = total_qty + OLD.qty,
+        inventory_amount = (total_qty + OLD.qty) * unit_cost,
+        last_updated = CURRENT_TIMESTAMP
+    WHERE product_id = OLD.product_id;
+
+    -- Restore stocks at location
+    UPDATE stocks
+    SET qty_stocked = qty_stocked + OLD.qty,
+        stock_line_amount = (qty_stocked + OLD.qty) * unit_cost,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE product_id = OLD.product_id
+      AND location_id = (SELECT location_id FROM orders WHERE order_id = OLD.order_id);
+END;
+CREATE TRIGGER trg_order_items_after_delete
+AFTER DELETE ON order_items
+FOR EACH ROW
+BEGIN
+    INSERT INTO orders_history(
+        order_id,
+        customer_id,
+        order_date,
+        order_type,
+        location_id,
+        status,
+        subtotal,
+        shipping_fee,
+        total,
+        payment_method,
+        delivery_method,
+        change_type,
+        changed_by,
+        changed_at,
+        remarks
+    )
+    VALUES (
+        OLD.order_id,
+        (SELECT customer_id FROM orders WHERE order_id = OLD.order_id),
+        (SELECT order_date FROM orders WHERE order_id = OLD.order_id),
+        (SELECT order_type FROM orders WHERE order_id = OLD.order_id),
+        (SELECT location_id FROM orders WHERE order_id = OLD.order_id),
+        (SELECT status FROM orders WHERE order_id = OLD.order_id),
+        (SELECT subtotal FROM orders WHERE order_id = OLD.order_id),
+        (SELECT shipping_fee FROM orders WHERE order_id = OLD.order_id),
+        (SELECT total FROM orders WHERE order_id = OLD.order_id),
+        (SELECT payment_method FROM orders WHERE order_id = OLD.order_id),
+        (SELECT delivery_method FROM orders WHERE order_id = OLD.order_id),
+        'delete',
+        NULL,
+        CURRENT_TIMESTAMP,
+        'Order item deleted'
+    );
+END;
+
+
+--returns
+CREATE TRIGGER trg_returns_after_insert
+AFTER INSERT ON returns
+FOR EACH ROW
+BEGIN
+    -- Update inventory
+    UPDATE inventory
+    SET total_qty = total_qty + (
+        SELECT SUM(qty_returned) FROM return_items WHERE return_id = NEW.return_id AND product_id = inventory.product_id
+    ),
+    inventory_amount = total_qty * unit_cost,
+    last_updated = CURRENT_TIMESTAMP
+    WHERE product_id IN (SELECT product_id FROM return_items WHERE return_id = NEW.return_id);
+
+    -- Update stocks
+    UPDATE stocks
+    SET qty_stocked = qty_stocked + (
+        SELECT SUM(qty_returned) FROM return_items WHERE return_id = NEW.return_id AND product_id = stocks.product_id
+    ),
+    stock_line_amount = qty_stocked * unit_cost,
+    updated_at = CURRENT_TIMESTAMP
+    WHERE location_id = NEW.location_id
+      AND product_id IN (SELECT product_id FROM return_items WHERE return_id = NEW.return_id);
+
+    -- Log negative sale in sales table
+    INSERT INTO sales(
+        order_id,
+        order_item_id,
+        return_id,
+        return_item_id,
+        product_id,
+        quantity,
+        cost_price,
+        wholesale_price,
+        sales_price,
+        amount,
+        sale_date,
+        location_id,
+        created_by,
+        notes
+    )
+    SELECT
+        ri.return_id, 
+        ri.item_id,
+        NEW.return_id,
+        ri.ri_id,
+        oi.product_id,
+        ri.qty_returned,
+        p.cost_price,
+        p.wholesale_price,
+        p.sale_price,
+        -(ri.qty_returned * p.sale_price),
+        CURRENT_TIMESTAMP,
+        NEW.location_id,
+        NEW.customer_id,
+        'Return processed'
+    FROM return_items ri
+    JOIN order_items oi ON ri.item_id = oi.item_id
+    JOIN products p ON ri.product_id = p.product_id
+    WHERE ri.return_id = NEW.return_id;
+END;
+CREATE TRIGGER trg_returns_after_update
+AFTER UPDATE ON returns
+FOR EACH ROW
+BEGIN
+    -- Log changes in returns_history
+    INSERT INTO returns_history(
+        return_id,
+        order_id,
+        customer_id,
+        location_id,
+        return_date,
+        return_amount,
+        return_reason,
+        change_type,
+        changed_by,
+        changed_at,
+        remarks
+    )
+    VALUES (
+        NEW.return_id,
+        NEW.order_id,
+        NEW.customer_id,
+        NEW.location_id,
+        NEW.return_date,
+        NEW.return_amount,
+        NEW.return_reason,
+        'edit',
+        NULL,
+        CURRENT_TIMESTAMP,
+        'Return updated'
+    );
+
+    -- Adjust inventory/stock if needed (simplified logic)
+    -- (More complex logic may track old vs new qty)
+END;
+CREATE TRIGGER trg_returns_before_delete
+BEFORE DELETE ON returns
+FOR EACH ROW
+BEGIN
+    -- Reduce inventory
+    UPDATE inventory
+    SET total_qty = total_qty - (
+        SELECT SUM(qty_returned) FROM return_items WHERE return_id = OLD.return_id AND product_id = inventory.product_id
+    ),
+    inventory_amount = total_qty * unit_cost,
+    last_updated = CURRENT_TIMESTAMP
+    WHERE product_id IN (SELECT product_id FROM return_items WHERE return_id = OLD.return_id);
+
+    -- Reduce stock
+    UPDATE stocks
+    SET qty_stocked = qty_stocked - (
+        SELECT SUM(qty_returned) FROM return_items WHERE return_id = OLD.return_id AND product_id = stocks.product_id
+    ),
+    stock_line_amount = qty_stocked * unit_cost,
+    updated_at = CURRENT_TIMESTAMP
+    WHERE location_id = OLD.location_id
+      AND product_id IN (SELECT product_id FROM return_items WHERE return_id = OLD.return_id);
+
+    -- Delete negative sales related to this return
+    DELETE FROM sales
+    WHERE return_id = OLD.return_id;
+END;
+CREATE TRIGGER trg_returns_after_delete
+AFTER DELETE ON returns
+FOR EACH ROW
+BEGIN
+    INSERT INTO returns_history(
+        return_id,
+        order_id,
+        customer_id,
+        location_id,
+        return_date,
+        return_amount,
+        return_reason,
+        change_type,
+        changed_by,
+        changed_at,
+        remarks
+    )
+    VALUES (
+        OLD.return_id,
+        OLD.order_id,
+        OLD.customer_id,
+        OLD.location_id,
+        OLD.return_date,
+        OLD.return_amount,
+        OLD.return_reason,
+        'delete',
+        NULL,
+        CURRENT_TIMESTAMP,
+        'Return deleted'
+    );
+END;
+CREATE TRIGGER trg_return_items_after_insert
+AFTER INSERT ON return_items
+FOR EACH ROW
+BEGIN
+    -- Increase inventory
+    UPDATE inventory
+    SET total_qty = total_qty + NEW.qty_returned,
+        inventory_amount = (total_qty + NEW.qty_returned) * unit_cost,
+        last_updated = CURRENT_TIMESTAMP
+    WHERE product_id = (SELECT product_id FROM order_items WHERE item_id = NEW.item_id);
+
+    -- Increase stock at the location of the original order
+    UPDATE stocks
+    SET qty_stocked = qty_stocked + NEW.qty_returned,
+        stock_line_amount = (qty_stocked + NEW.qty_returned) * unit_cost,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE product_id = (SELECT product_id FROM order_items WHERE item_id = NEW.item_id)
+      AND location_id = (SELECT location_id FROM orders WHERE order_id = (SELECT order_id FROM return_items WHERE ri_id = NEW.ri_id));
+
+    -- Log negative sale to reflect return in sales
+    INSERT INTO sales(
+        return_item_id,
+        return_id,
+        product_id,
+        quantity,
+        cost_price,
+        wholesale_price,
+        sales_price,
+        amount,
+        sale_date,
+        location_id,
+        created_by,
+        notes
+    )
+    SELECT
+        NEW.ri_id,
+        NEW.return_id,
+        oi.product_id,
+        NEW.qty_returned,
+        p.cost_price,
+        p.wholesale_price,
+        oi.unit_price,
+        -(NEW.qty_returned * oi.unit_price),
+        CURRENT_TIMESTAMP,
+        o.location_id,
+        r.customer_id,
+        'Return processed'
+    FROM order_items oi
+    JOIN products p ON oi.product_id = p.product_id
+    JOIN returns r ON NEW.return_id = r.return_id
+    JOIN orders o ON r.order_id = o.order_id
+    WHERE oi.item_id = NEW.item_id;
+END;
+CREATE TRIGGER trg_return_items_after_update
+AFTER UPDATE ON return_items
+FOR EACH ROW
+BEGIN
+    -- Adjust inventory
+    UPDATE inventory
+    SET total_qty = total_qty + (NEW.qty_returned - OLD.qty_returned),
+        inventory_amount = (total_qty + (NEW.qty_returned - OLD.qty_returned)) * unit_cost,
+        last_updated = CURRENT_TIMESTAMP
+    WHERE product_id = (SELECT product_id FROM order_items WHERE item_id = NEW.item_id);
+
+    -- Adjust stock at original location
+    UPDATE stocks
+    SET qty_stocked = qty_stocked + (NEW.qty_returned - OLD.qty_returned),
+        stock_line_amount = (qty_stocked + (NEW.qty_returned - OLD.qty_returned)) * unit_cost,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE product_id = (SELECT product_id FROM order_items WHERE item_id = NEW.item_id)
+      AND location_id = (SELECT location_id FROM orders WHERE order_id = (SELECT order_id FROM return_items WHERE ri_id = NEW.ri_id));
+
+    -- Optional: log history
+    INSERT INTO return_items_history(
+        ri_id,
+        old_qty_returned,
+        new_qty_returned,
+        old_unit_price,
+        new_unit_price,
+        change_type,
+        changed_by,
+        changed_at,
+        remarks
+    )
+    VALUES (
+        OLD.ri_id,
+        OLD.qty_returned,
+        NEW.qty_returned,
+        OLD.unit_price,
+        NEW.unit_price,
+        'edit',
+        NULL,
+        CURRENT_TIMESTAMP,
+        'Return item updated'
+    );
+END;
+CREATE TRIGGER trg_return_items_before_delete
+BEFORE DELETE ON return_items
+FOR EACH ROW
+BEGIN
+    -- Decrease inventory
+    UPDATE inventory
+    SET total_qty = total_qty - OLD.qty_returned,
+        inventory_amount = (total_qty - OLD.qty_returned) * unit_cost,
+        last_updated = CURRENT_TIMESTAMP
+    WHERE product_id = (SELECT product_id FROM order_items WHERE item_id = OLD.item_id);
+
+    -- Decrease stock at location
+    UPDATE stocks
+    SET qty_stocked = qty_stocked - OLD.qty_returned,
+        stock_line_amount = (qty_stocked - OLD.qty_returned) * unit_cost,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE product_id = (SELECT product_id FROM order_items WHERE item_id = OLD.item_id)
+      AND location_id = (SELECT location_id FROM orders WHERE order_id = (SELECT order_id FROM return_items WHERE ri_id = OLD.ri_id));
+
+    -- Delete related negative sales entry
+    DELETE FROM sales
+    WHERE return_item_id = OLD.ri_id;
+END;
+CREATE TRIGGER trg_return_items_after_delete
+AFTER DELETE ON return_items
+FOR EACH ROW
+BEGIN
+    INSERT INTO return_items_history(
+        ri_id,
+        old_qty_returned,
+        new_qty_returned,
+        old_unit_price,
+        new_unit_price,
+        change_type,
+        changed_by,
+        changed_at,
+        remarks
+    )
+    VALUES (
+        OLD.ri_id,
+        OLD.qty_returned,
+        0,
+        OLD.unit_price,
+        0,
+        'delete',
+        NULL,
+        CURRENT_TIMESTAMP,
+        'Return item deleted'
+    );
+END;
+
+
+--locations
+CREATE TRIGGER trg_locations_after_insert
+AFTER INSERT ON locations
+FOR EACH ROW
+BEGIN
+    -- Optional: insert into locations_history
+    INSERT INTO locations_history(
+        location_id,
+        location_name,
+        location_type,
+        address,
+        contact_no,
+        managed_by,
+        staff_capacity,
+        location_status,
+        change_type,
+        changed_at
+    )
+    VALUES (
+        NEW.location_id,
+        NEW.location_name,
+        NEW.location_type,
+        NEW.address,
+        NEW.contact_no,
+        NEW.managed_by,
+        NEW.staff_capacity,
+        NEW.location_status,
+        'add',
+        CURRENT_TIMESTAMP
+    );
+END;
+CREATE TRIGGER trg_locations_after_update
+AFTER UPDATE ON locations
+FOR EACH ROW
+BEGIN
+    -- Log history of changes
+    INSERT INTO locations_history(
+        location_id,
+        location_name,
+        location_type,
+        address,
+        contact_no,
+        managed_by,
+        staff_capacity,
+        location_status,
+        change_type,
+        changed_at
+    )
+    VALUES (
+        OLD.location_id,
+        OLD.location_name,
+        OLD.location_type,
+        OLD.address,
+        OLD.contact_no,
+        OLD.managed_by,
+        OLD.staff_capacity,
+        OLD.location_status,
+        'edit',
+        CURRENT_TIMESTAMP
+    );
+
+    -- Optional: if location status changed to inactive/closed, update staff assignments
+    UPDATE staff
+    SET location_id = NULL
+    WHERE location_id = NEW.location_id AND NEW.location_status IN ('inactive','closed');
+END;
+CREATE TRIGGER trg_locations_before_delete
+BEFORE DELETE ON locations
+FOR EACH ROW
+BEGIN
+    -- Prevent deletion if stocks exist
+    SELECT
+        CASE
+            WHEN (SELECT COUNT(*) FROM stocks WHERE location_id = OLD.location_id) > 0 THEN
+                RAISE(ABORT, 'Cannot delete location with existing stocks')
+        END;
+
+    -- Prevent deletion if staff assigned
+    SELECT
+        CASE
+            WHEN (SELECT COUNT(*) FROM staff WHERE location_id = OLD.location_id) > 0 THEN
+                RAISE(ABORT, 'Cannot delete location with staff assigned')
+        END;
+
+    -- Prevent deletion if orders exist
+    SELECT
+        CASE
+            WHEN (SELECT COUNT(*) FROM orders WHERE location_id = OLD.location_id) > 0 THEN
+                RAISE(ABORT, 'Cannot delete location with existing orders')
+        END;
+END;
+CREATE TRIGGER trg_locations_after_delete
+AFTER DELETE ON locations
+FOR EACH ROW
+BEGIN
+    INSERT INTO locations_history(
+        location_id,
+        location_name,
+        location_type,
+        address,
+        contact_no,
+        managed_by,
+        staff_capacity,
+        location_status,
+        change_type,
+        changed_at
+    )
+    VALUES (
+        OLD.location_id,
+        OLD.location_name,
+        OLD.location_type,
+        OLD.address,
+        OLD.contact_no,
+        OLD.managed_by,
+        OLD.staff_capacity,
+        OLD.location_status,
+        'delete',
+        CURRENT_TIMESTAMP
+    );
+END;
+
+
+--stocks
+CREATE TRIGGER trg_stocks_after_insert
+AFTER INSERT ON stocks
+FOR EACH ROW
+BEGIN
+    -- Update inventory: add new stock quantity
+    INSERT INTO inventory (product_id, total_qty, unit_cost)
+    VALUES (NEW.product_id, NEW.qty_stocked, NEW.unit_cost)
+    ON CONFLICT(product_id) DO UPDATE SET
+        total_qty = total_qty + NEW.qty_stocked,
+        unit_cost = NEW.unit_cost,
+        inventory_amount = (total_qty + NEW.qty_stocked) * NEW.unit_cost,
+        last_updated = CURRENT_TIMESTAMP;
+
+    -- Log into stocks_history
+    INSERT INTO stocks_history (
+        stock_id,
+        product_id,
+        location_id,
+        old_qty,
+        new_qty,
+        change_type,
+        changed_by,
+        changed_at,
+        remarks
+    )
+    VALUES (
+        NEW.stock_id,
+        NEW.product_id,
+        NEW.location_id,
+        0,
+        NEW.qty_stocked,
+        'add',
+        NEW.manager_id,
+        CURRENT_TIMESTAMP,
+        'Initial stock addition'
+    );
+END;
+CREATE TRIGGER trg_stocks_after_update
+AFTER UPDATE ON stocks
+FOR EACH ROW
+BEGIN
+    -- Adjust inventory based on quantity change
+    UPDATE inventory
+    SET total_qty = total_qty - OLD.qty_stocked + NEW.qty_stocked,
+        inventory_amount = NEW.qty_stocked * NEW.unit_cost,
+        last_updated = CURRENT_TIMESTAMP
+    WHERE product_id = NEW.product_id;
+
+    -- Log changes in stocks_history
+    INSERT INTO stocks_history (
+        stock_id,
+        product_id,
+        location_id,
+        old_qty,
+        new_qty,
+        change_type,
+        changed_by,
+        changed_at,
+        remarks
+    )
+    VALUES (
+        NEW.stock_id,
+        NEW.product_id,
+        NEW.location_id,
+        OLD.qty_stocked,
+        NEW.qty_stocked,
+        'adjust',
+        NEW.manager_id,
+        CURRENT_TIMESTAMP,
+        'Stock quantity updated'
+    );
+END;
+CREATE TRIGGER trg_stocks_before_delete
+BEFORE DELETE ON stocks
+FOR EACH ROW
+BEGIN
+    SELECT
+        CASE
+            WHEN (SELECT COUNT(*) FROM order_items WHERE product_id = OLD.product_id) > 0 THEN
+                RAISE(ABORT, 'Cannot delete stock referenced in order_items')
+        END;
+
+    SELECT
+        CASE
+            WHEN (SELECT COUNT(*) FROM stock_movement_records WHERE product_id = OLD.product_id) > 0 THEN
+                RAISE(ABORT, 'Cannot delete stock referenced in stock movements')
+        END;
+END;
+CREATE TRIGGER trg_stocks_after_delete
+AFTER DELETE ON stocks
+FOR EACH ROW
+BEGIN
+    -- Adjust inventory
+    UPDATE inventory
+    SET total_qty = total_qty - OLD.qty_stocked,
+        inventory_amount = total_qty * OLD.unit_cost,
+        last_updated = CURRENT_TIMESTAMP
+    WHERE product_id = OLD.product_id;
+
+    -- Log deletion in stocks_history
+    INSERT INTO stocks_history (
+        stock_id,
+        product_id,
+        location_id,
+        old_qty,
+        new_qty,
+        change_type,
+        changed_by,
+        changed_at,
+        remarks
+    )
+    VALUES (
+        OLD.stock_id,
+        OLD.product_id,
+        OLD.location_id,
+        OLD.qty_stocked,
+        0,
+        'remove',
+        OLD.manager_id,
+        CURRENT_TIMESTAMP,
+        'Stock deleted'
+    );
+END;
+
+
+--inventory
+CREATE TRIGGER trg_inventory_after_update
+AFTER UPDATE ON inventory
+FOR EACH ROW
+BEGIN
+    INSERT INTO inventory_history (
+        inventory_id,
+        product_id,
+        old_total_qty,
+        new_total_qty,
+        change_type,
+        changed_by,
+        changed_at,
+        remarks
+    )
+    VALUES (
+        NEW.inventory_id,
+        NEW.product_id,
+        OLD.total_qty,
+        NEW.total_qty,
+        'adjust',
+        NULL, -- can be set to staff_id if manual adjustment is done by staff
+        CURRENT_TIMESTAMP,
+        'Inventory manually adjusted'
+    );
+END;
+CREATE TRIGGER trg_inventory_before_delete
+BEFORE DELETE ON inventory
+FOR EACH ROW
+BEGIN
+    SELECT
+        CASE
+            WHEN (SELECT COUNT(*) FROM stocks WHERE product_id = OLD.product_id) > 0 THEN
+                RAISE(ABORT, 'Cannot delete inventory record linked with stocks')
+        END;
+
+    SELECT
+        CASE
+            WHEN (SELECT COUNT(*) FROM sales WHERE product_id = OLD.product_id) > 0 THEN
+                RAISE(ABORT, 'Cannot delete inventory record linked with sales')
+        END;
+END;
+CREATE TRIGGER trg_inventory_after_delete
+AFTER DELETE ON inventory
+FOR EACH ROW
+BEGIN
+    INSERT INTO inventory_history (
+        inventory_id,
+        product_id,
+        old_total_qty,
+        new_total_qty,
+        change_type,
+        changed_by,
+        changed_at,
+        remarks
+    )
+    VALUES (
+        OLD.inventory_id,
+        OLD.product_id,
+        OLD.total_qty,
+        0,
+        'remove',
+        NULL,
+        CURRENT_TIMESTAMP,
+        'Inventory record deleted'
+    );
+END;
+
+
+--purchases
+-- Trigger to update stocks after a purchase
+CREATE TRIGGER trg_purchases_after_insert
+AFTER INSERT ON purchases
+FOR EACH ROW
+BEGIN
+    -- Update stocks for the purchased product at the location
+    INSERT INTO stocks (product_id, location_id, qty_stocked, unit_cost, manager_id, created_at, updated_at)
+    VALUES (NEW.product_id, NEW.location_id, NEW.quantity, NEW.unit_cost, NEW.received_by, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ON CONFLICT(product_id, location_id) 
+    DO UPDATE SET 
+        qty_stocked = qty_stocked + NEW.quantity,
+        unit_cost = NEW.unit_cost,
+        updated_at = CURRENT_TIMESTAMP;
+
+    -- Update inventory table
+    INSERT INTO inventory (product_id, total_qty, unit_cost, last_updated)
+    VALUES (NEW.product_id, NEW.quantity, NEW.unit_cost, CURRENT_TIMESTAMP)
+    ON CONFLICT(product_id)
+    DO UPDATE SET 
+        total_qty = total_qty + NEW.quantity,
+        unit_cost = NEW.unit_cost,
+        last_updated = CURRENT_TIMESTAMP;
+
+    -- Log inventory history
+    INSERT INTO inventory_history (
+        inventory_id,
+        product_id,
+        old_total_qty,
+        new_total_qty,
+        change_type,
+        changed_by,
+        changed_at,
+        remarks
+    )
+    VALUES (
+        (SELECT inventory_id FROM inventory WHERE product_id = NEW.product_id),
+        NEW.product_id,
+        (SELECT total_qty - NEW.quantity FROM inventory WHERE product_id = NEW.product_id),
+        (SELECT total_qty FROM inventory WHERE product_id = NEW.product_id),
+        'add',
+        NEW.received_by,
+        CURRENT_TIMESTAMP,
+        'Purchase added to inventory'
+    );
+END;
+CREATE TRIGGER trg_purchases_after_update
+AFTER UPDATE ON purchases
+FOR EACH ROW
+BEGIN
+    -- Adjust stocks quantity for the product at the location
+    UPDATE stocks
+    SET qty_stocked = qty_stocked - OLD.quantity + NEW.quantity,
+        unit_cost = NEW.unit_cost,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE product_id = NEW.product_id AND location_id = NEW.location_id;
+
+    -- Adjust inventory total quantity
+    UPDATE inventory
+    SET total_qty = total_qty - OLD.quantity + NEW.quantity,
+        unit_cost = NEW.unit_cost,
+        last_updated = CURRENT_TIMESTAMP
+    WHERE product_id = NEW.product_id;
+
+    -- Log inventory history
+    INSERT INTO inventory_history (
+        inventory_id,
+        product_id,
+        old_total_qty,
+        new_total_qty,
+        change_type,
+        changed_by,
+        changed_at,
+        remarks
+    )
+    VALUES (
+        (SELECT inventory_id FROM inventory WHERE product_id = NEW.product_id),
+        NEW.product_id,
+        (SELECT total_qty - (NEW.quantity - OLD.quantity) FROM inventory WHERE product_id = NEW.product_id),
+        (SELECT total_qty FROM inventory WHERE product_id = NEW.product_id),
+        'adjust',
+        NEW.received_by,
+        CURRENT_TIMESTAMP,
+        'Purchase updated'
+    );
+END;
+CREATE TRIGGER trg_purchases_before_delete
+BEFORE DELETE ON purchases
+FOR EACH ROW
+BEGIN
+    SELECT
+        CASE
+            WHEN (SELECT COUNT(*) FROM sales WHERE product_id = OLD.product_id) > 0 THEN
+                RAISE(ABORT, 'Cannot delete purchase, some quantity already sold')
+        END;
+END;
+CREATE TRIGGER trg_purchases_after_delete
+AFTER DELETE ON purchases
+FOR EACH ROW
+BEGIN
+    -- Reduce stocks
+    UPDATE stocks
+    SET qty_stocked = qty_stocked - OLD.quantity,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE product_id = OLD.product_id AND location_id = OLD.location_id;
+
+    -- Reduce inventory
+    UPDATE inventory
+    SET total_qty = total_qty - OLD.quantity,
+        last_updated = CURRENT_TIMESTAMP
+    WHERE product_id = OLD.product_id;
+
+    -- Log inventory history
+    INSERT INTO inventory_history (
+        inventory_id,
+        product_id,
+        old_total_qty,
+        new_total_qty,
+        change_type,
+        changed_by,
+        changed_at,
+        remarks
+    )
+    VALUES (
+        (SELECT inventory_id FROM inventory WHERE product_id = OLD.product_id),
+        OLD.product_id,
+        (SELECT total_qty + OLD.quantity FROM inventory WHERE product_id = OLD.product_id),
+        (SELECT total_qty FROM inventory WHERE product_id = OLD.product_id),
+        'remove',
+        OLD.received_by,
+        CURRENT_TIMESTAMP,
+        'Purchase deleted, inventory adjusted'
+    );
+END;
+
+
+--stock_movement_records
+CREATE TRIGGER trg_smr_after_insert
+AFTER INSERT ON stock_movement_records
+FOR EACH ROW
+BEGIN
+    -- Deduct quantity from from_location
+    UPDATE stocks
+    SET qty_stocked = qty_stocked - NEW.quantity_moved
+    WHERE product_id = NEW.product_id AND location_id = NEW.from_location_id;
+
+    -- Add quantity to to_location, insert if not exists
+    INSERT INTO stocks (product_id, location_id, qty_stocked, unit_cost, manager_id, created_at, updated_at)
+    VALUES (NEW.product_id, NEW.to_location_id, NEW.quantity_moved, NEW.unit_cost, NEW.approved_by, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ON CONFLICT(product_id, location_id) DO UPDATE SET
+        qty_stocked = qty_stocked + NEW.quantity_moved,
+        unit_cost = NEW.unit_cost,
+        updated_at = CURRENT_TIMESTAMP;
+
+    -- Log movement in stock_movement_history
+    INSERT INTO stock_movement_history (
+        smr_id,
+        product_id,
+        from_location_id,
+        to_location_id,
+        old_quantity,
+        new_quantity,
+        change_type,
+        changed_by,
+        changed_at,
+        remarks
+    )
+    VALUES (
+        NEW.smr_id,
+        NEW.product_id,
+        NEW.from_location_id,
+        NEW.to_location_id,
+        NEW.quantity_moved,
+        NEW.quantity_moved,
+        'move',
+        NEW.approved_by,
+        CURRENT_TIMESTAMP,
+        'Stock moved between locations'
+    );
+
+    -- Update inventory total_qty
+    -- Inventory remains same total_qty, only location distribution changes, so we may skip change to total_qty
+END;
+CREATE TRIGGER trg_smr_after_update
+AFTER UPDATE ON stock_movement_records
+FOR EACH ROW
+BEGIN
+    -- Reverse old movement
+    UPDATE stocks
+    SET qty_stocked = qty_stocked + OLD.quantity_moved
+    WHERE product_id = OLD.product_id AND location_id = OLD.from_location_id;
+
+    UPDATE stocks
+    SET qty_stocked = qty_stocked - OLD.quantity_moved
+    WHERE product_id = OLD.product_id AND location_id = OLD.to_location_id;
+
+    -- Apply new movement
+    UPDATE stocks
+    SET qty_stocked = qty_stocked - NEW.quantity_moved
+    WHERE product_id = NEW.product_id AND location_id = NEW.from_location_id;
+
+    INSERT INTO stocks (product_id, location_id, qty_stocked, unit_cost, manager_id, created_at, updated_at)
+    VALUES (NEW.product_id, NEW.to_location_id, NEW.quantity_moved, NEW.unit_cost, NEW.approved_by, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ON CONFLICT(product_id, location_id) DO UPDATE SET
+        qty_stocked = qty_stocked + NEW.quantity_moved,
+        unit_cost = NEW.unit_cost,
+        updated_at = CURRENT_TIMESTAMP;
+
+    -- Log in history
+    INSERT INTO stock_movement_history (
+        smr_id,
+        product_id,
+        from_location_id,
+        to_location_id,
+        old_quantity,
+        new_quantity,
+        change_type,
+        changed_by,
+        changed_at,
+        remarks
+    )
+    VALUES (
+        NEW.smr_id,
+        NEW.product_id,
+        NEW.from_location_id,
+        NEW.to_location_id,
+        OLD.quantity_moved,
+        NEW.quantity_moved,
+        'adjust',
+        NEW.approved_by,
+        CURRENT_TIMESTAMP,
+        'Stock movement updated'
+    );
+END;
+CREATE TRIGGER trg_smr_before_delete
+BEFORE DELETE ON stock_movement_records
+FOR EACH ROW
+BEGIN
+    SELECT
+        CASE
+            WHEN (SELECT COUNT(*) FROM sales 
+                  WHERE product_id = OLD.product_id AND location_id = OLD.to_location_id) > 0
+            THEN RAISE(ABORT, 'Cannot delete movement: stock already sold at destination')
+        END;
+END;
+CREATE TRIGGER trg_smr_after_delete
+AFTER DELETE ON stock_movement_records
+FOR EACH ROW
+BEGIN
+    -- Reverse the movement
+    UPDATE stocks
+    SET qty_stocked = qty_stocked + OLD.quantity_moved
+    WHERE product_id = OLD.product_id AND location_id = OLD.from_location_id;
+
+    UPDATE stocks
+    SET qty_stocked = qty_stocked - OLD.quantity_moved
+    WHERE product_id = OLD.product_id AND location_id = OLD.to_location_id;
+
+    -- Log in history
+    INSERT INTO stock_movement_history (
+        smr_id,
+        product_id,
+        from_location_id,
+        to_location_id,
+        old_quantity,
+        new_quantity,
+        change_type,
+        changed_by,
+        changed_at,
+        remarks
+    )
+    VALUES (
+        OLD.smr_id,
+        OLD.product_id,
+        OLD.from_location_id,
+        OLD.to_location_id,
+        OLD.quantity_moved,
+        0,
+        'delete',
+        OLD.approved_by,
+        CURRENT_TIMESTAMP,
+        'Stock movement deleted'
+    );
+END;
+
+
+-roles
+CREATE TRIGGER trg_roles_after_insert
+AFTER INSERT ON roles
+FOR EACH ROW
+BEGIN
+    -- Example: log role creation in roles_history (assuming such table exists)
+    INSERT INTO roles_history (role_id, role_name, change_type, changed_by, changed_at, remarks)
+    VALUES (NEW.role_id, NEW.role_name, 'add', NULL, CURRENT_TIMESTAMP, 'New role created');
+END;
+CREATE TRIGGER trg_roles_after_update
+AFTER UPDATE ON roles
+FOR EACH ROW
+BEGIN
+    INSERT INTO roles_history (role_id, role_name, change_type, changed_by, changed_at, remarks)
+    VALUES (NEW.role_id, NEW.role_name, 'edit', NULL, CURRENT_TIMESTAMP, 'Role updated');
+END;
+CREATE TRIGGER trg_roles_before_delete
+BEFORE DELETE ON roles
+FOR EACH ROW
+BEGIN
+    SELECT
+        CASE
+            WHEN (SELECT COUNT(*) FROM staff WHERE role_id = OLD.role_id) > 0
+            THEN RAISE(ABORT, 'Cannot delete role: staff members are assigned')
+        END;
+END;
+CREATE TRIGGER trg_roles_after_delete
+AFTER DELETE ON roles
+FOR EACH ROW
+BEGIN
+    INSERT INTO roles_history (role_id, role_name, change_type, changed_by, changed_at, remarks)
+    VALUES (OLD.role_id, OLD.role_name, 'delete', NULL, CURRENT_TIMESTAMP, 'Role deleted');
+END;
+
+
+--invoices
+CREATE TRIGGER trg_invoices_after_insert
+AFTER INSERT ON invoices
+FOR EACH ROW
+BEGIN
+    -- Update related order status if order_id exists
+    UPDATE orders
+    SET status = 'processed'
+    WHERE order_id = NEW.order_id;
+
+    -- Reduce stocks based on invoice items
+    UPDATE stocks
+    SET qty_stocked = qty_stocked - (
+        SELECT SUM(quantity_sold) 
+        FROM invoice_items 
+        WHERE invoice_id = NEW.invoice_id AND product_id = stocks.product_id
+    )
+    WHERE product_id IN (SELECT product_id FROM invoice_items WHERE invoice_id = NEW.invoice_id);
+
+    -- Update inventory table
+    UPDATE inventory
+    SET total_qty = (
+        SELECT SUM(qty_stocked) 
+        FROM stocks 
+        WHERE product_id = inventory.product_id
+    ),
+    unit_cost = (
+        SELECT unit_cost FROM products WHERE product_id = inventory.product_id
+    ),
+    inventory_amount = total_qty * unit_cost,
+    last_updated = CURRENT_TIMESTAMP
+    WHERE product_id IN (SELECT product_id FROM invoice_items WHERE invoice_id = NEW.invoice_id);
+
+    -- Optional: log invoice creation in invoices_history
+    INSERT INTO invoices_history (invoice_id, change_type, changed_by, changed_at, remarks)
+    VALUES (NEW.invoice_id, 'add', NEW.created_by, CURRENT_TIMESTAMP, 'Invoice created');
+END;
+CREATE TRIGGER trg_invoices_after_update
+AFTER UPDATE ON invoices
+FOR EACH ROW
+BEGIN
+    -- Recalculate stocks if quantity changes
+    UPDATE stocks
+    SET qty_stocked = qty_stocked - (
+        SELECT SUM(quantity_sold) 
+        FROM invoice_items 
+        WHERE invoice_id = NEW.invoice_id AND product_id = stocks.product_id
+    )
+    WHERE product_id IN (SELECT product_id FROM invoice_items WHERE invoice_id = NEW.invoice_id);
+
+    -- Update inventory accordingly
+    UPDATE inventory
+    SET total_qty = (SELECT SUM(qty_stocked) FROM stocks WHERE product_id = inventory.product_id),
+        inventory_amount = total_qty * unit_cost,
+        last_updated = CURRENT_TIMESTAMP
+    WHERE product_id IN (SELECT product_id FROM invoice_items WHERE invoice_id = NEW.invoice_id);
+
+    -- Log invoice update
+    INSERT INTO invoices_history (invoice_id, change_type, changed_by, changed_at, remarks)
+    VALUES (NEW.invoice_id, 'edit', NEW.created_by, CURRENT_TIMESTAMP, 'Invoice updated');
+END;
+CREATE TRIGGER trg_invoices_before_delete
+BEFORE DELETE ON invoices
+FOR EACH ROW
+BEGIN
+    SELECT
+    CASE
+        WHEN (SELECT COUNT(*) FROM sales WHERE order_id = OLD.order_id) > 0
+        THEN RAISE(ABORT, 'Cannot delete invoice: sales already logged')
+    END;
+END;
+CREATE TRIGGER trg_invoices_after_delete
+AFTER DELETE ON invoices
+FOR EACH ROW
+BEGIN
+    -- Restore stock quantities
+    UPDATE stocks
+    SET qty_stocked = qty_stocked + (
+        SELECT SUM(quantity_sold)
+        FROM invoice_items
+        WHERE invoice_id = OLD.invoice_id AND product_id = stocks.product_id
+    )
+    WHERE product_id IN (SELECT product_id FROM invoice_items WHERE invoice_id = OLD.invoice_id);
+
+    -- Update inventory accordingly
+    UPDATE inventory
+    SET total_qty = (SELECT SUM(qty_stocked) FROM stocks WHERE product_id = inventory.product_id),
+        inventory_amount = total_qty * unit_cost,
+        last_updated = CURRENT_TIMESTAMP
+    WHERE product_id IN (SELECT product_id FROM invoice_items WHERE invoice_id = OLD.invoice_id);
+
+    -- Log deletion
+    INSERT INTO invoices_history (invoice_id, change_type, changed_by, changed_at, remarks)
+    VALUES (OLD.invoice_id, 'delete', OLD.created_by, CURRENT_TIMESTAMP, 'Invoice deleted');
+END;
+
+
+--invoice_items
+CREATE TRIGGER trg_invoice_items_after_insert
+AFTER INSERT ON invoice_items
+FOR EACH ROW
+BEGIN
+    -- Reduce stock
+    UPDATE stocks
+    SET qty_stocked = qty_stocked - NEW.quantity_sold
+    WHERE product_id = NEW.product_id
+      AND location_id = (SELECT location_id FROM invoices WHERE invoice_id = NEW.invoice_id);
+
+    -- Update inventory
+    UPDATE inventory
+    SET total_qty = (SELECT SUM(qty_stocked) FROM stocks WHERE product_id = inventory.product_id),
+        inventory_amount = total_qty * unit_cost,
+        last_updated = CURRENT_TIMESTAMP
+    WHERE product_id = NEW.product_id;
+
+    -- Optional: log history
+    INSERT INTO invoice_items_history (invoice_item_id, change_type, changed_at)
+    VALUES (NEW.invoice_item_id, 'add', CURRENT_TIMESTAMP);
+END;
+CREATE TRIGGER trg_invoice_items_after_update
+AFTER UPDATE ON invoice_items
+FOR EACH ROW
+BEGIN
+    -- Adjust stock based on quantity difference
+    UPDATE stocks
+    SET qty_stocked = qty_stocked + OLD.quantity_sold - NEW.quantity_sold
+    WHERE product_id = NEW.product_id
+      AND location_id = (SELECT location_id FROM invoices WHERE invoice_id = NEW.invoice_id);
+
+    -- Update inventory
+    UPDATE inventory
+    SET total_qty = (SELECT SUM(qty_stocked) FROM stocks WHERE product_id = inventory.product_id),
+        inventory_amount = total_qty * unit_cost,
+        last_updated = CURRENT_TIMESTAMP
+    WHERE product_id = NEW.product_id;
+
+    -- Log update
+    INSERT INTO invoice_items_history (invoice_item_id, change_type, changed_at)
+    VALUES (NEW.invoice_item_id, 'edit', CURRENT_TIMESTAMP);
+END;
+CREATE TRIGGER trg_invoice_items_before_delete
+BEFORE DELETE ON invoice_items
+FOR EACH ROW
+BEGIN
+    SELECT
+    CASE
+        WHEN (SELECT COUNT(*) FROM sales WHERE order_item_id = OLD.item_id) > 0
+        THEN RAISE(ABORT, 'Cannot delete invoice item: sale already logged')
+    END;
+END;
+CREATE TRIGGER trg_invoice_items_after_delete
+AFTER DELETE ON invoice_items
+FOR EACH ROW
+BEGIN
+    -- Restore stock
+    UPDATE stocks
+    SET qty_stocked = qty_stocked + OLD.quantity_sold
+    WHERE product_id = OLD.product_id
+      AND location_id = (SELECT location_id FROM invoices WHERE invoice_id = OLD.invoice_id);
+
+    -- Update inventory
+    UPDATE inventory
+    SET total_qty = (SELECT SUM(qty_stocked) FROM stocks WHERE product_id = inventory.product_id),
+        inventory_amount = total_qty * unit_cost,
+        last_updated = CURRENT_TIMESTAMP
+    WHERE product_id = OLD.product_id;
+
+    -- Log deletion
+    INSERT INTO invoice_items_history (invoice_item_id, change_type, changed_at)
+    VALUES (OLD.invoice_item_id, 'delete', CURRENT_TIMESTAMP);
+END;
+
+
+--sales
+CREATE TRIGGER trg_sales_after_insert
+AFTER INSERT ON sales
+FOR EACH ROW
+BEGIN
+    -- Optional: ensure profit_loss is correctly calculated
+    UPDATE sales
+    SET profit_loss = amount - (cost_price * quantity)
+    WHERE sales_id = NEW.sales_id;
+
+    -- Log history
+    INSERT INTO sales_history (sales_id, old_quantity, new_quantity, old_amount, new_amount, change_type, changed_by, changed_at)
+    VALUES (NEW.sales_id, 0, NEW.quantity, 0, NEW.amount, 'add', NEW.created_by, CURRENT_TIMESTAMP);
+END;
+CREATE TRIGGER trg_sales_after_update
+AFTER UPDATE ON sales
+FOR EACH ROW
+BEGIN
+    -- Recalculate profit_loss
+    UPDATE sales
+    SET profit_loss = amount - (cost_price * quantity)
+    WHERE sales_id = NEW.sales_id;
+
+    -- Log history
+    INSERT INTO sales_history (sales_id, old_quantity, new_quantity, old_amount, new_amount, change_type, changed_by, changed_at)
+    VALUES (OLD.sales_id, OLD.quantity, NEW.quantity, OLD.amount, NEW.amount, 'edit', NEW.created_by, CURRENT_TIMESTAMP);
+END;
+CREATE TRIGGER trg_sales_before_delete
+BEFORE DELETE ON sales
+FOR EACH ROW
+BEGIN
+    -- Prevent deletion if already audited
+    -- RAISE(ABORT, 'Cannot delete sale record after audit'); -- Uncomment if needed
+END;
+CREATE TRIGGER trg_sales_after_delete
+AFTER DELETE ON sales
+FOR EACH ROW
+BEGIN
+    INSERT INTO sales_history (sales_id, old_quantity, new_quantity, old_amount, new_amount, change_type, changed_by, changed_at)
+    VALUES (OLD.sales_id, OLD.quantity, 0, OLD.amount, 0, 'delete', OLD.created_by, CURRENT_TIMESTAMP);
+END;

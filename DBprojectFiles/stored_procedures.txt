@@ -1,0 +1,389 @@
+--categories
+import sqlite3
+from datetime import datetime
+
+# === Function to manage categories (Insert, Update, Delete) ===
+def manage_category(conn, action, category_id=None, brand=None, model=None, product_type=None, color=None):
+    """
+    Mimics stored procedure for 'categories' table.
+    
+    Parameters:
+    - conn: sqlite3 connection object
+    - action: 'insert', 'update', 'delete'
+    - category_id: Required for update/delete
+    - brand: category brand
+    - model: model name
+    - product_type: 'laptop', 'desktop', or 'tower'
+    - color: optional
+    """
+
+    try:
+        cursor = conn.cursor()
+        conn.execute('BEGIN')  # start transaction
+
+        if action.lower() == 'insert':
+            cursor.execute("""
+                INSERT INTO categories (category_brand, model_name, product_type, color, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (brand, model, product_type, color, datetime.now(), datetime.now()))
+            conn.commit()
+            print("Category inserted successfully.")
+            return cursor.lastrowid
+
+        elif action.lower() == 'update':
+            if not category_id:
+                raise ValueError("category_id is required for update.")
+            cursor.execute("""
+                UPDATE categories
+                SET category_brand = ?, model_name = ?, product_type = ?, color = ?, updated_at = ?
+                WHERE category_id = ?
+            """, (brand, model, product_type, color, datetime.now(), category_id))
+            conn.commit()
+            print(f"Category {category_id} updated successfully.")
+            return category_id
+
+        elif action.lower() == 'delete':
+            if not category_id:
+                raise ValueError("category_id is required for delete.")
+            cursor.execute("""
+                DELETE FROM categories WHERE category_id = ?
+            """, (category_id,))
+            conn.commit()
+            print(f"Category {category_id} deleted successfully.")
+            return category_id
+
+        else:
+            raise ValueError("Invalid action. Use 'insert', 'update', or 'delete'.")
+
+    except Exception as e:
+        conn.rollback()
+        print("Error:", e)
+        return None
+
+# === Usage example ===
+if __name__ == "__main__":
+    conn = sqlite3.connect("laptop_inventory.db")
+    
+    # Insert a category
+    cat_id = manage_category(conn, 'insert', brand='Dell', model='XPS', product_type='laptop', color='Silver')
+    
+    # Update the category
+    manage_category(conn, 'update', category_id=cat_id, brand='Dell', model='XPS 13', product_type='laptop', color='Black')
+    
+    # Delete the category
+    # manage_category(conn, 'delete', category_id=cat_id)
+    
+    conn.close()
+
+
+--suppliers
+def sp_manage_supplier(
+    conn,
+    action,
+    supplier_id=None,
+    supplier_name=None,
+    contact_no=None,
+    email=None,
+    warehouse_address=None,
+    bank_ac_no=None
+):
+    """
+    Stored-procedure-like function for SUPPLIERS table
+    Actions: insert | update | delete
+    """
+
+    try:
+        cursor = conn.cursor()
+        conn.execute("BEGIN")
+
+        # ===================== INSERT =====================
+        if action == "insert":
+            cursor.execute("""
+                INSERT INTO suppliers (
+                    supplier_name,
+                    contact_no,
+                    email,
+                    warehouse_address,
+                    bank_ac_no,
+                    created_at,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                supplier_name,
+                contact_no,
+                email,
+                warehouse_address,
+                bank_ac_no,
+                datetime.now(),
+                datetime.now()
+            ))
+
+            conn.commit()
+            return cursor.lastrowid
+
+        # ===================== UPDATE =====================
+        elif action == "update":
+            if not supplier_id:
+                raise ValueError("supplier_id required for update")
+
+            cursor.execute("""
+                UPDATE suppliers
+                SET supplier_name = ?,
+                    contact_no = ?,
+                    email = ?,
+                    warehouse_address = ?,
+                    bank_ac_no = ?,
+                    updated_at = ?
+                WHERE supplier_id = ?
+            """, (
+                supplier_name,
+                contact_no,
+                email,
+                warehouse_address,
+                bank_ac_no,
+                datetime.now(),
+                supplier_id
+            ))
+
+            conn.commit()
+            return supplier_id
+
+        # ===================== DELETE (SOFT) =====================
+        elif action == "delete":
+            if not supplier_id:
+                raise ValueError("supplier_id required for delete")
+
+            cursor.execute("""
+                UPDATE suppliers
+                SET updated_at = ?
+                WHERE supplier_id = ?
+            """, (
+                datetime.now(),
+                supplier_id
+            ))
+
+            conn.commit()
+            return supplier_id
+
+        else:
+            raise ValueError("Invalid action")
+
+    except Exception as e:
+        conn.rollback()
+        raise e
+
+
+--products
+def sp_manage_product(
+    conn,
+    action,
+    product_id=None,
+    product_name=None,
+    category_id=None,
+    supplier_id=None,
+    screen_size=None,
+    color=None,
+    processor=None,
+    ram=None,
+    primary_storage=None,
+    secondary_storage=None,
+    gpu=None,
+    cost_price=None,
+    wholesale_price=None,
+    sale_price=None,
+    is_active=1,
+    changed_by=None,
+    remarks=None
+):
+    """
+    Stored-procedure-like function for PRODUCTS
+    Actions: insert | update | deactivate | activate
+    """
+
+    try:
+        cursor = conn.cursor()
+        conn.execute("BEGIN")
+
+        # ===================== INSERT =====================
+        if action == "insert":
+            cursor.execute("""
+                INSERT INTO products (
+                    product_id, product_name, category_id, supplier_id,
+                    screen_size, color, processor, ram,
+                    primary_storage, secondary_storage, gpu,
+                    cost_price, wholesale_price, sale_price,
+                    is_active, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                product_id, product_name, category_id, supplier_id,
+                screen_size, color, processor, ram,
+                primary_storage, secondary_storage, gpu,
+                cost_price, wholesale_price, sale_price,
+                is_active,
+                datetime.now(),
+                datetime.now()
+            ))
+
+            conn.commit()
+            return product_id
+
+        # ===================== UPDATE =====================
+        elif action == "update":
+            if not product_id:
+                raise ValueError("product_id required")
+
+            cursor.execute("""
+                UPDATE products
+                SET product_name = ?,
+                    category_id = ?,
+                    supplier_id = ?,
+                    screen_size = ?,
+                    color = ?,
+                    processor = ?,
+                    ram = ?,
+                    primary_storage = ?,
+                    secondary_storage = ?,
+                    gpu = ?,
+                    cost_price = ?,
+                    wholesale_price = ?,
+                    sale_price = ?,
+                    updated_at = ?
+                WHERE product_id = ?
+            """, (
+                product_name, category_id, supplier_id,
+                screen_size, color, processor, ram,
+                primary_storage, secondary_storage, gpu,
+                cost_price, wholesale_price, sale_price,
+                datetime.now(),
+                product_id
+            ))
+
+            conn.commit()
+            return product_id
+
+        # ===================== DEACTIVATE =====================
+        elif action == "deactivate":
+            cursor.execute("""
+                UPDATE products
+                SET is_active = 0,
+                    updated_at = ?
+                WHERE product_id = ?
+            """, (datetime.now(), product_id))
+
+            conn.commit()
+            return product_id
+
+        # ===================== ACTIVATE =====================
+        elif action == "activate":
+            cursor.execute("""
+                UPDATE products
+                SET is_active = 1,
+                    updated_at = ?
+                WHERE product_id = ?
+            """, (datetime.now(), product_id))
+
+            conn.commit()
+            return product_id
+
+        else:
+            raise ValueError("Invalid action")
+
+    except Exception as e:
+        conn.rollback()
+        raise e
+
+
+--purchases
+import sqlite3
+from datetime import datetime
+
+def sp_create_purchase(
+    conn,
+    purchase_id,
+    supplier_id,
+    invoice_no,
+    purchase_date,
+    created_by,
+    remarks,
+    items
+):
+    """
+    items = [
+        {
+            "product_id": "...",
+            "quantity": 10,
+            "unit_cost": 150000
+        },
+        ...
+    ]
+    """
+
+    try:
+        cursor = conn.cursor()
+        conn.execute("BEGIN")
+
+        # ===================== PURCHASE MASTER =====================
+        cursor.execute("""
+            INSERT INTO purchases (
+                purchase_id, supplier_id, invoice_no,
+                purchase_date, created_by, remarks, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            purchase_id,
+            supplier_id,
+            invoice_no,
+            purchase_date,
+            created_by,
+            remarks,
+            datetime.now()
+        ))
+
+        # ===================== PURCHASE ITEMS =====================
+        for item in items:
+            cursor.execute("""
+                INSERT INTO purchase_items (
+                    purchase_id, product_id,
+                    quantity, unit_cost
+                )
+                VALUES (?, ?, ?, ?)
+            """, (
+                purchase_id,
+                item["product_id"],
+                item["quantity"],
+                item["unit_cost"]
+            ))
+
+            # 🔹 STOCK UPDATE
+            cursor.execute("""
+                UPDATE stocks
+                SET quantity = quantity + ?
+                WHERE product_id = ?
+            """, (
+                item["quantity"],
+                item["product_id"]
+            ))
+
+            # 🔹 STOCK MOVEMENT LOG
+            cursor.execute("""
+                INSERT INTO stock_movements (
+                    product_id, movement_type,
+                    quantity, reference_id,
+                    created_at
+                )
+                VALUES (?, 'IN', ?, ?, ?)
+            """, (
+                item["product_id"],
+                item["quantity"],
+                purchase_id,
+                datetime.now()
+            ))
+
+        conn.commit()
+        return purchase_id
+
+    except Exception as e:
+        conn.rollback()
+        raise e
