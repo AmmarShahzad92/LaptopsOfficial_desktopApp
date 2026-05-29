@@ -1,0 +1,13 @@
+# Requirements for Laptops Official
+PyQt6>=6.5.0
+PyQt6-WebEngine>=6.5.0
+reportlab>=4.0.4
+python-barcode>=0.14.0
+pandas>=2.2.0
+openpyxl>=3.1.2
+
+qrcode[pil]>=7.4.2
+matplotlib>=3.9.0
+seaborn>=0.13.0
+Flask>=3.0.0
+Flask-CORS>=4.0.0
